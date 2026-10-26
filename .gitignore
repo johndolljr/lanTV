@@ -1,0 +1,27 @@
+# Xcode & Developer artifacts
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+DerivedData/
+
+# Build Products
+.build/
+build/
+
+# Vendored Binary Frameworks (fetched via scripts/setup-dependencies.sh)
+Vendor/VLCKit.xcframework
+
+# macOS Metadata
+.DS_Store
+._*
+*.xcuserdatad
+
+# Local Environment & Secrets
+.env
+.env.*
+.local-domains
+*.swp
+*.bak
+
+# Local Agent Rules
+AGENTS.md

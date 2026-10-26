@@ -1,0 +1,7 @@
+{
+  "schema": "lantv-guide-plugin/v1",
+  "id": "tvpassport-station",
+  "name": "TV Passport Station",
+  "language": "python3",
+  "command": ["python3", "plugin.py"]
+}
