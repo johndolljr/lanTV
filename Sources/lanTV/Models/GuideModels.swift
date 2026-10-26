@@ -225,6 +225,55 @@ struct GuideProgramme: Identifiable, Hashable, Codable {
     let title: String
     let detail: String?
     let iconURL: URL?
+    var seasonEpisode: String?
+    var subTitle: String?
+
+    var formattedSeasonEpisode: String? {
+        RecordingFilenameGenerator.formatSeasonEpisodeForDisplay(
+            seasonEpisode: seasonEpisode,
+            title: title,
+            detail: detail
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, channelID, start, stop, title, detail, iconURL, seasonEpisode, subTitle
+    }
+
+    init(
+        id: String,
+        channelID: String,
+        start: Date,
+        stop: Date,
+        title: String,
+        detail: String?,
+        iconURL: URL?,
+        seasonEpisode: String? = nil,
+        subTitle: String? = nil
+    ) {
+        self.id = id
+        self.channelID = channelID
+        self.start = start
+        self.stop = stop
+        self.title = title
+        self.detail = detail
+        self.iconURL = iconURL
+        self.seasonEpisode = seasonEpisode
+        self.subTitle = subTitle
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        channelID = try container.decode(String.self, forKey: .channelID)
+        start = try container.decode(Date.self, forKey: .start)
+        stop = try container.decode(Date.self, forKey: .stop)
+        title = try container.decode(String.self, forKey: .title)
+        detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        iconURL = try container.decodeIfPresent(URL.self, forKey: .iconURL)
+        seasonEpisode = try container.decodeIfPresent(String.self, forKey: .seasonEpisode)
+        subTitle = try container.decodeIfPresent(String.self, forKey: .subTitle)
+    }
 }
 
 struct HDHomeRunLineupItem: Decodable {
@@ -267,6 +316,16 @@ struct XMLTVProgramme {
     var title: String?
     var detail: String?
     var iconURL: URL?
+    var seasonEpisode: String?
+    var subTitle: String?
+
+    var formattedSeasonEpisode: String? {
+        RecordingFilenameGenerator.formatSeasonEpisodeForDisplay(
+            seasonEpisode: seasonEpisode,
+            title: title,
+            detail: detail
+        )
+    }
 }
 
 struct AppSettings: Codable, Equatable {
@@ -280,6 +339,22 @@ struct AppSettings: Codable, Equatable {
     var localAPIPort: Int
     var hasInitializedGuidePlugins: Bool
     var lastSelectedChannelID: String?
+    var recordingsDirectoryPath: String
+    var maxSimultaneousRecordings: Int
+    var autoRecordNextShowOnSameChannel: Bool
+    var recordingStartLeadMinutes: Int
+
+    var recordingsDirectoryURL: URL {
+        let expanded = (recordingsDirectoryPath as NSString).expandingTildeInPath
+        return URL(fileURLWithPath: expanded)
+    }
+
+    static var defaultRecordingsPath: String {
+        if let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first {
+            return movies.appendingPathComponent("lanTV").path
+        }
+        return "~/Movies/lanTV"
+    }
 
     enum CodingKeys: String, CodingKey {
         case sources
@@ -292,6 +367,10 @@ struct AppSettings: Codable, Equatable {
         case localAPIPort
         case hasInitializedGuidePlugins
         case lastSelectedChannelID
+        case recordingsDirectoryPath
+        case maxSimultaneousRecordings
+        case autoRecordNextShowOnSameChannel
+        case recordingStartLeadMinutes
     }
 
     init(
@@ -304,7 +383,11 @@ struct AppSettings: Codable, Equatable {
         volume: Double,
         localAPIPort: Int = Int(LocalAPIServer.defaultPort),
         hasInitializedGuidePlugins: Bool = false,
-        lastSelectedChannelID: String? = nil
+        lastSelectedChannelID: String? = nil,
+        recordingsDirectoryPath: String = AppSettings.defaultRecordingsPath,
+        maxSimultaneousRecordings: Int = 1,
+        autoRecordNextShowOnSameChannel: Bool = true,
+        recordingStartLeadMinutes: Int = 0
     ) {
         self.sources = sources
         self.guidePlugins = guidePlugins
@@ -316,6 +399,10 @@ struct AppSettings: Codable, Equatable {
         self.localAPIPort = localAPIPort
         self.hasInitializedGuidePlugins = hasInitializedGuidePlugins
         self.lastSelectedChannelID = lastSelectedChannelID
+        self.recordingsDirectoryPath = recordingsDirectoryPath
+        self.maxSimultaneousRecordings = maxSimultaneousRecordings
+        self.autoRecordNextShowOnSameChannel = autoRecordNextShowOnSameChannel
+        self.recordingStartLeadMinutes = recordingStartLeadMinutes
     }
 
     init(from decoder: Decoder) throws {
@@ -330,6 +417,10 @@ struct AppSettings: Codable, Equatable {
         localAPIPort = try container.decodeIfPresent(Int.self, forKey: .localAPIPort) ?? Int(LocalAPIServer.defaultPort)
         hasInitializedGuidePlugins = try container.decodeIfPresent(Bool.self, forKey: .hasInitializedGuidePlugins) ?? false
         lastSelectedChannelID = try container.decodeIfPresent(String.self, forKey: .lastSelectedChannelID)
+        recordingsDirectoryPath = try container.decodeIfPresent(String.self, forKey: .recordingsDirectoryPath) ?? AppSettings.defaultRecordingsPath
+        maxSimultaneousRecordings = try container.decodeIfPresent(Int.self, forKey: .maxSimultaneousRecordings) ?? 1
+        autoRecordNextShowOnSameChannel = try container.decodeIfPresent(Bool.self, forKey: .autoRecordNextShowOnSameChannel) ?? true
+        recordingStartLeadMinutes = try container.decodeIfPresent(Int.self, forKey: .recordingStartLeadMinutes) ?? 0
     }
 
     static let `default` = AppSettings(
@@ -340,6 +431,9 @@ struct AppSettings: Codable, Equatable {
         volume: 0.8,
         localAPIPort: Int(LocalAPIServer.defaultPort),
         hasInitializedGuidePlugins: true,
-        lastSelectedChannelID: nil
+        lastSelectedChannelID: nil,
+        recordingsDirectoryPath: AppSettings.defaultRecordingsPath,
+        maxSimultaneousRecordings: 1,
+        autoRecordNextShowOnSameChannel: true
     )
 }

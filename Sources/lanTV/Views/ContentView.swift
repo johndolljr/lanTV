@@ -57,6 +57,8 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("lanTV")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize()
 
                 if let generatedAt = viewModel.generatedAt {
                     Text("Guide updated \(generatedAt.formatted(date: .abbreviated, time: .shortened))")
@@ -100,6 +102,23 @@ struct ContentView: View {
             .buttonStyle(ChromeButtonStyle(kind: .primary))
 
             Button {
+                viewModel.openRecordingsWindow()
+            } label: {
+                let activeCount = viewModel.recordingManager.activeRecordingsCount
+                if activeCount > 0 {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                        Text("DVR (\(activeCount))")
+                    }
+                } else {
+                    Label("Recordings", systemImage: "recordingtape")
+                }
+            }
+            .buttonStyle(ChromeButtonStyle(kind: .secondary))
+
+            Button {
                 viewModel.toggleAdultLock()
             } label: {
                 Label(
@@ -114,7 +133,9 @@ struct ContentView: View {
                     viewModel.focusDetachedPlayerWindow()
                 } label: {
                     Label("Player Window", systemImage: "macwindow.on.rectangle")
+                        .labelStyle(.iconOnly)
                 }
+                .help("Show player window")
                 .buttonStyle(ChromeButtonStyle(kind: .secondary))
             }
 
@@ -123,6 +144,7 @@ struct ContentView: View {
                     .controlSize(.small)
             }
         }
+        .lineLimit(1)
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .background(panelBackground)
@@ -197,7 +219,7 @@ struct ContentView: View {
             Capsule()
                 .strokeBorder(isFilterFieldFocused ? Color.accentColor.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1)
         }
-        .frame(minWidth: 200, maxWidth: 280)
+        .frame(minWidth: 100, maxWidth: 280)
     }
 
     @ViewBuilder
@@ -308,7 +330,16 @@ struct ContentView: View {
                                 channelColumnWidth: channelColumnWidth,
                                 minuteWidth: minuteWidth,
                                 currentTime: currentTime,
-                                isSelected: channel.id == viewModel.selectedChannelID
+                                isSelected: channel.id == viewModel.selectedChannelID,
+                                recordingItemProvider: { programme in
+                                    viewModel.recordingItem(for: programme)
+                                },
+                                onToggleRecording: { programme in
+                                    viewModel.toggleScheduleRecording(channel: channel, programme: programme)
+                                },
+                                onOpenRecordings: {
+                                    viewModel.openRecordingsWindow()
+                                }
                             ) { selectedChannel in
                                 viewModel.selectChannel(selectedChannel)
                             }
@@ -494,12 +525,24 @@ struct SelectedChannelPlayerPanel: View {
                                 .lineLimit(1)
                         }
 
-                        Text(programmeTimeLabel(nowPlaying))
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                        HStack(spacing: 6) {
+                            if let se = nowPlaying.formattedSeasonEpisode {
+                                Text(se)
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1.5)
+                                    .background(Color.blue.opacity(0.25))
+                                    .foregroundStyle(.blue)
+                                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                            }
+
+                            Text(programmeTimeLabel(nowPlaying))
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                     }
-                    .frame(maxWidth: 240, alignment: .trailing)
+                    .frame(maxWidth: 280, alignment: .trailing)
                     .layoutPriority(0)
                 }
 
@@ -513,6 +556,19 @@ struct SelectedChannelPlayerPanel: View {
                     .help(viewModel.isPlaying ? "Pause (Space)" : "Play (Space)")
                     .keyboardShortcut(.space, modifiers: [])
 
+                    RecordBadgeButton(
+                        isRecording: viewModel.isCurrentChannelRecording,
+                        durationText: viewModel.currentChannelRecordingItem?.formattedDuration
+                    ) {
+                        viewModel.toggleRecordingCurrentShow()
+                    }
+
+                    if let recording = viewModel.playingRecording {
+                        RecordingPlaybackChip(title: recording.programmeTitle) {
+                            viewModel.stopRecordingPlayback()
+                        }
+                    }
+
                     if viewModel.isLiveStream {
                         LiveBadgeButton(
                             isAtLiveEdge: viewModel.isAtLiveEdge,
@@ -524,16 +580,69 @@ struct SelectedChannelPlayerPanel: View {
 
                     CompactVolumeControl(volume: $viewModel.volume)
 
+                    if viewModel.audioDelayMs != 0 {
+                        Button {
+                            viewModel.resetAudioDelay()
+                        } label: {
+                            Text(String(format: "Sync: %+dms", viewModel.audioDelayMs))
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Color.orange.opacity(0.22))
+                                .foregroundStyle(.orange)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Click to reset audio delay (Keys: [ / ] adjust, \\ reset)")
+                    }
+
+                    // Audio sync shortcuts
+                    Button {
+                        viewModel.adjustAudioDelay(byMilliseconds: -50)
+                    } label: { EmptyView() }
+                    .keyboardShortcut("[", modifiers: [])
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+
+                    Button {
+                        viewModel.adjustAudioDelay(byMilliseconds: 50)
+                    } label: { EmptyView() }
+                    .keyboardShortcut("]", modifiers: [])
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+
+                    Button {
+                        viewModel.resetAudioDelay()
+                    } label: { EmptyView() }
+                    .keyboardShortcut("\\", modifiers: [])
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+
+                    Button {
+                        viewModel.toggleFullScreen()
+                    } label: { EmptyView() }
+                    .keyboardShortcut("f", modifiers: [])
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
+
                     AirPlayChromeControl(isEnabled: supportsAirPlay)
                         .help(supportsAirPlay ? "AirPlay" : "AirPlay is only available for AVPlayer-backed streams")
 
                     FloatingChromeIconButton(
-                        systemImage: dockMode == .floating ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                        systemImage: dockMode == .floating ? "pip.exit" : "pip.enter",
                         isEnabled: true
                     ) {
                         onDockToggle()
                     }
-                    .help(dockMode == .floating ? "Dock player in main window" : "Open player in floating window")
+                    .help(dockMode == .floating ? "Dock player in main window" : "Pop out to floating player")
+
+                    FloatingChromeIconButton(
+                        systemImage: "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left",
+                        isEnabled: true
+                    ) {
+                        viewModel.toggleFullScreen()
+                    }
+                    .help("Full Screen (F)")
                 }
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
@@ -543,7 +652,10 @@ struct SelectedChannelPlayerPanel: View {
                 playerSurface
                     .frame(maxWidth: .infinity, maxHeight: dockMode == .floating ? .infinity : nil)
                     .contentShape(Rectangle())
-                    .onTapGesture {
+                    .onTapGesture(count: 2) {
+                        viewModel.toggleFullScreen()
+                    }
+                    .onTapGesture(count: 1) {
                         viewModel.togglePlayPause()
                     }
 
@@ -585,19 +697,10 @@ struct SelectedChannelPlayerPanel: View {
 
     @ViewBuilder
     private var playerSurface: some View {
-        Group {
-            if viewModel.usesVLCPlayback(for: channel) {
-                VLCPlayerView(url: channel.streamURL, volume: viewModel.volume) { isPlaying in
-                    viewModel.setVLCPlaybackState(isPlaying: isPlaying)
-                }
-                .id(viewModel.vlcPlaybackGeneration)
-            } else {
-                PlayerContainerView(player: viewModel.player)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(16 / 9, contentMode: dockMode == .floating ? .fit : .fill)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        SharedPlayerSurfaceView(viewModel: viewModel, channel: channel)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(16 / 9, contentMode: dockMode == .floating ? .fit : .fill)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private func programmeTimeLabel(_ programme: GuideProgramme) -> String {
@@ -616,7 +719,7 @@ struct SelectedChannelPlayerPanel: View {
     }
 }
 
-private struct CompactVolumeControl: View {
+struct CompactVolumeControl: View {
     @Binding var volume: Double
 
     private var volumeIcon: String {
@@ -668,7 +771,61 @@ private struct CompactVolumeControl: View {
     }
 }
 
-private struct LiveBadgeButton: View {
+struct RecordBadgeButton: View {
+    let isRecording: Bool
+    let durationText: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isRecording {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 7, height: 7)
+
+                    Text(durationText.map { "REC \($0)" } ?? "REC")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                        .monospacedDigit()
+                } else {
+                    Image(systemName: "record.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+
+                    Text("REC")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 36)
+            .background(
+                LinearGradient(
+                    colors: [
+                        isRecording ? Color.red.opacity(0.25) : Color.white.opacity(0.12),
+                        isRecording ? Color.red.opacity(0.12) : Color.white.opacity(0.06)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(isRecording ? Color.red.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .help(isRecording ? "Stop Recording (⌘⌥R)" : "Record Current Show (⌘⌥R)")
+        .keyboardShortcut("r", modifiers: [.command, .option])
+    }
+}
+
+struct LiveBadgeButton: View {
     let isAtLiveEdge: Bool
     let secondsBehindLive: Double
     let action: () -> Void
@@ -721,7 +878,7 @@ private struct LiveBadgeButton: View {
     }
 }
 
-private struct FloatingChromeIconButton: View {
+struct FloatingChromeIconButton: View {
     let systemImage: String
     let isEnabled: Bool
     let action: () -> Void
@@ -753,7 +910,7 @@ private struct FloatingChromeIconButton: View {
     }
 }
 
-private struct AirPlayChromeControl: View {
+struct AirPlayChromeControl: View {
     let isEnabled: Bool
 
     var body: some View {
@@ -787,6 +944,9 @@ private struct GuideChannelRow: View {
     let minuteWidth: CGFloat
     let currentTime: Date
     let isSelected: Bool
+    let recordingItemProvider: (GuideProgramme) -> RecordingItem?
+    let onToggleRecording: (GuideProgramme) -> Void
+    let onOpenRecordings: () -> Void
     let onSelect: (GuideChannel) -> Void
 
     var body: some View {
@@ -888,12 +1048,18 @@ private struct GuideChannelRow: View {
             ForEach(programmesInTimeline) { programme in
                 GuideProgrammeBlock(
                     programme: programme,
+                    recordingItem: recordingItemProvider(programme),
                     xOffset: timeline.xOffset(for: max(programme.start, timeline.start), minuteWidth: minuteWidth),
                     width: timeline.width(for: programme, minuteWidth: minuteWidth),
-                    isCurrent: programme.start <= currentTime && currentTime < programme.stop
-                ) {
-                    onSelect(channel)
-                }
+                    isCurrent: programme.start <= currentTime && currentTime < programme.stop,
+                    action: {
+                        onSelect(channel)
+                    },
+                    onToggleRecording: {
+                        onToggleRecording(programme)
+                    },
+                    onOpenRecordings: onOpenRecordings
+                )
             }
         }
         .frame(width: timeline.width(minuteWidth: minuteWidth), height: rowHeight)
@@ -910,17 +1076,60 @@ private struct GuideChannelRow: View {
 
 private struct GuideProgrammeBlock: View {
     let programme: GuideProgramme
+    let recordingItem: RecordingItem?
     let xOffset: CGFloat
     let width: CGFloat
     let isCurrent: Bool
     let action: () -> Void
+    let onToggleRecording: () -> Void
+    let onOpenRecordings: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(programme.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(programme.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+
+                    if let se = programme.formattedSeasonEpisode {
+                        Text(se)
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.white.opacity(0.24))
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .lineLimit(1)
+                    }
+
+                    if let rec = recordingItem, rec.status == .recording {
+                        HStack(spacing: 2) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 5, height: 5)
+                            Text("REC")
+                                .font(.system(size: 8, weight: .black))
+                                .foregroundStyle(.red)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.red.opacity(0.18))
+                        .clipShape(Capsule())
+                    } else if let rec = recordingItem, rec.status == .scheduled {
+                        HStack(spacing: 2) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 7, weight: .bold))
+                            Text("REC")
+                                .font(.system(size: 8, weight: .black))
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.cyan.opacity(0.20))
+                        .foregroundStyle(.cyan)
+                        .clipShape(Capsule())
+                    }
+                }
 
                 Text(timeLabel)
                     .font(.caption.monospacedDigit())
@@ -938,6 +1147,44 @@ private struct GuideProgrammeBlock: View {
         }
         .buttonStyle(.plain)
         .offset(x: xOffset, y: 6)
+        .help(tooltipText)
+        .contextMenu {
+            if let se = programme.formattedSeasonEpisode {
+                Text("\(programme.title) • \(se)")
+            } else {
+                Text(programme.title)
+            }
+            Divider()
+            if let rec = recordingItem, rec.status == .recording {
+                Button(role: .destructive) {
+                    onToggleRecording()
+                } label: {
+                    Label("Stop Recording", systemImage: "stop.circle.fill")
+                }
+            } else if let rec = recordingItem, rec.status == .scheduled {
+                Button(role: .destructive) {
+                    onToggleRecording()
+                } label: {
+                    Label("Cancel Scheduled Recording", systemImage: "xmark.circle")
+                }
+            } else {
+                Button {
+                    onToggleRecording()
+                } label: {
+                    if isCurrent {
+                        Label("Record Show Now", systemImage: "record.circle")
+                    } else {
+                        Label("Schedule Recording", systemImage: "calendar.badge.clock")
+                    }
+                }
+            }
+
+            Button {
+                onOpenRecordings()
+            } label: {
+                Label("Open Recordings DVR...", systemImage: "recordingtape")
+            }
+        }
     }
 
     private var background: some ShapeStyle {
@@ -952,6 +1199,18 @@ private struct GuideProgrammeBlock: View {
 
     private var timeLabel: String {
         "\(programme.start.formatted(date: .omitted, time: .shortened)) - \(programme.stop.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private var tooltipText: String {
+        var parts: [String] = [programme.title]
+        if let se = programme.formattedSeasonEpisode {
+            parts.append(se)
+        }
+        parts.append(timeLabel)
+        if let detail = programme.detail, !detail.isEmpty {
+            return parts.joined(separator: " • ") + "\n\n" + detail
+        }
+        return parts.joined(separator: " • ")
     }
 }
 
@@ -1044,12 +1303,13 @@ private struct GuideTimeline {
     }
 }
 
-private struct PlayerContainerView: NSViewRepresentable {
+struct PlayerContainerView: NSViewRepresentable {
     let player: AVPlayer
+    var showsControls = false
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
-        view.controlsStyle = .none
+        view.controlsStyle = showsControls ? .inline : .none
         view.videoGravity = .resizeAspect
         view.player = player
         return view
@@ -1057,5 +1317,103 @@ private struct PlayerContainerView: NSViewRepresentable {
 
     func updateNSView(_ nsView: AVPlayerView, context: Context) {
         nsView.player = player
+        nsView.controlsStyle = showsControls ? .inline : .none
+    }
+}
+
+struct SharedPlayerSurfaceView: View {
+    let viewModel: GuideViewModel
+    let channel: GuideChannel
+
+    var body: some View {
+        Group {
+            if viewModel.usesVLCPlayback(for: channel) {
+                PersistentNSViewHost(view: viewModel.sharedVLCView)
+            } else {
+                // Each window gets its own AVPlayerView; AVPlayerView does not survive being re-parented across windows.
+                PlayerContainerView(player: viewModel.player, showsControls: viewModel.playingRecording != nil)
+            }
+        }
+    }
+}
+
+final class VideoContainerWrapperView: NSView {
+    weak var hostedView: NSView?
+
+    func attach(_ child: NSView) {
+        guard hostedView !== child || child.superview !== self else { return }
+        child.removeFromSuperview()
+        child.frame = bounds
+        child.autoresizingMask = [.width, .height]
+        addSubview(child)
+        hostedView = child
+        refreshPlayerLayer()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { refreshPlayerLayer() }
+    }
+
+    /// AVPlayerView stops drawing video after being moved to a different window (pop-out / fullscreen),
+    /// so rebind its player once it is in the new window's hierarchy.
+    private func refreshPlayerLayer() {
+        guard let playerView = hostedView as? AVPlayerView else { return }
+        DispatchQueue.main.async { [weak playerView] in
+            guard let playerView, playerView.window != nil else { return }
+            let player = playerView.player
+            playerView.player = nil
+            playerView.player = player
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        hostedView?.frame = bounds
+    }
+}
+
+struct PersistentNSViewHost: NSViewRepresentable {
+    let view: NSView
+
+    func makeNSView(context: Context) -> VideoContainerWrapperView {
+        let container = VideoContainerWrapperView()
+        container.attach(view)
+        return container
+    }
+
+    func updateNSView(_ container: VideoContainerWrapperView, context: Context) {
+        container.attach(view)
+    }
+
+    static func dismantleNSView(_ container: VideoContainerWrapperView, coordinator: ()) {
+        // The shared view may already have been re-attached to another window's container
+        // (pop-out / fullscreen); only detach it if this container still owns it.
+        if let hosted = container.hostedView, hosted.superview === container {
+            hosted.removeFromSuperview()
+        }
+        container.hostedView = nil
+    }
+}
+
+struct RecordingPlaybackChip: View {
+    let title: String
+    let onExit: () -> Void
+
+    var body: some View {
+        Button(action: onExit) {
+            HStack(spacing: 6) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Back to Live")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.accentColor.opacity(0.2), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help("Playing recording: \(title). Click to return to the live channel.")
     }
 }

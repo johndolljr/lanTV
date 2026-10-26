@@ -22,7 +22,6 @@ enum GuideRepositoryError: LocalizedError {
 
 actor GuideRepository {
     private let session: URLSession
-    private let xmltvParser = XMLTVParser()
     private let pluginRunner = GuidePluginRunner()
     private let pluginCacheStore: GuidePluginCacheStore
 
@@ -212,7 +211,8 @@ actor GuideRepository {
         let (data, response) = try await session.data(from: xmltvURL)
         try validate(response: response, url: xmltvURL)
 
-        let parsedGuide = try xmltvParser.parse(data: data)
+        let parser = XMLTVParser()
+        let parsedGuide = try parser.parse(data: data)
         let channels = parsedGuide.channels.values.map { channel in
             let scopedChannelID = scopedChannelID(sourceID: source.id, rawChannelID: channel.id)
             let programmes = parsedGuide.programmes
@@ -225,7 +225,9 @@ actor GuideRepository {
                         stop: programme.stop,
                         title: cleanDisplayTitle(programme.title ?? channel.displayName ?? channel.id),
                         detail: programme.detail,
-                        iconURL: programme.iconURL ?? channel.iconURL
+                        iconURL: programme.iconURL ?? channel.iconURL,
+                        seasonEpisode: programme.seasonEpisode,
+                        subTitle: programme.subTitle
                     )
                 }
                 .sorted { $0.start < $1.start }
@@ -402,7 +404,9 @@ actor GuideRepository {
                     stop: programme.stop,
                     title: meaningful,
                     detail: programme.detail,
-                    iconURL: programme.iconURL
+                    iconURL: programme.iconURL,
+                    seasonEpisode: programme.seasonEpisode,
+                    subTitle: programme.subTitle
                 )
             }
 
@@ -419,7 +423,9 @@ actor GuideRepository {
                 stop: programme.stop,
                 title: replacement,
                 detail: programme.detail,
-                iconURL: programme.iconURL
+                iconURL: programme.iconURL,
+                seasonEpisode: programme.seasonEpisode,
+                subTitle: programme.subTitle
             )
         }
     }

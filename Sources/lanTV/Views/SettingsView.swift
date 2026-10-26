@@ -5,6 +5,7 @@ struct SettingsView: View {
         case sources = "Sources"
         case plugins = "Plugins"
         case behavior = "Behavior"
+        case recordings = "Recordings"
 
         var id: String { rawValue }
 
@@ -16,6 +17,8 @@ struct SettingsView: View {
                 return "puzzlepiece.extension"
             case .behavior:
                 return "slider.horizontal.3"
+            case .recordings:
+                return "record.circle"
             }
         }
 
@@ -182,6 +185,8 @@ struct SettingsView: View {
             pluginsTab
         case .behavior:
             behaviorTab
+        case .recordings:
+            recordingsTab
         }
     }
 
@@ -315,6 +320,92 @@ struct SettingsView: View {
                             guard let value = Int(digits) else { return }
                             draft.localAPIPort = min(max(value, 1024), 65535)
                         }
+                }
+            }
+        }
+    }
+
+    private var recordingsTab: some View {
+        SectionCard(
+            title: "Recording & DVR",
+            subtitle: "Configure storage destination, simultaneous recording limits, and live viewing roll-over."
+        ) {
+            VStack(spacing: 16) {
+                LabeledControlRow(
+                    title: "Destination folder",
+                    subtitle: "Recordings are saved as .mp4 files with show title, season/episode or broadcast date."
+                ) {
+                    HStack(spacing: 8) {
+                        Text(draft.recordingsDirectoryPath)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 240, alignment: .trailing)
+
+                        Button("Choose...") {
+                            let openPanel = NSOpenPanel()
+                            openPanel.canChooseFiles = false
+                            openPanel.canChooseDirectories = true
+                            openPanel.canCreateDirectories = true
+                            openPanel.allowsMultipleSelection = false
+                            openPanel.directoryURL = draft.recordingsDirectoryURL
+
+                            if openPanel.runModal() == .OK, let selectedURL = openPanel.url {
+                                draft.recordingsDirectoryPath = selectedURL.path
+                            }
+                        }
+                        .buttonStyle(SettingsActionButtonStyle(kind: .secondary))
+
+                        Button {
+                            let url = draft.recordingsDirectoryURL
+                            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Image(systemName: "folder")
+                        }
+                        .buttonStyle(SettingsActionButtonStyle(kind: .secondary))
+                        .help("Open folder in Finder")
+                    }
+                }
+
+                Divider().overlay(Color.white.opacity(0.08))
+
+                LabeledControlRow(
+                    title: "Max simultaneous recordings",
+                    subtitle: "Number of concurrent background recordings allowed (in addition to your live stream)."
+                ) {
+                    Stepper(value: $draft.maxSimultaneousRecordings, in: 1...10) {
+                        Text("\(draft.maxSimultaneousRecordings)")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .frame(width: 140, alignment: .trailing)
+                }
+
+                Divider().overlay(Color.white.opacity(0.08))
+
+                LabeledControlRow(
+                    title: "Start recordings early",
+                    subtitle: "Begin recording this many minutes before the scheduled start, since shows often start ahead of the guide time."
+                ) {
+                    Stepper(value: $draft.recordingStartLeadMinutes, in: 0...30) {
+                        Text(draft.recordingStartLeadMinutes == 0 ? "Off" : "\(draft.recordingStartLeadMinutes) min")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .frame(width: 140, alignment: .trailing)
+                }
+
+                Divider().overlay(Color.white.opacity(0.08))
+
+                LabeledControlRow(
+                    title: "Auto-record next show on live channel",
+                    subtitle: "If you continue watching the channel when a recording ends, stop and immediately start recording the next show."
+                ) {
+                    Toggle("", isOn: $draft.autoRecordNextShowOnSameChannel)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                 }
             }
         }

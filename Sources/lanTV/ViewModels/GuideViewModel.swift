@@ -1,4 +1,5 @@
 import AVFoundation
+import AVKit
 import Foundation
 import IOKit.pwr_mgt
 import LocalAuthentication
@@ -6,6 +7,10 @@ import Observation
 
 extension Notification.Name {
     static let lanTVStopPlayback = Notification.Name("lanTVStopPlayback")
+    static let lanTVResumePlayback = Notification.Name("lanTVResumePlayback")
+    static let lanTVAdjustAudioDelay = Notification.Name("lanTVAdjustAudioDelay")
+    static let lanTVResetAudioDelay = Notification.Name("lanTVResetAudioDelay")
+    static let lanTVReconnectLiveStream = Notification.Name("lanTVReconnectLiveStream")
 }
 
 @MainActor
@@ -35,14 +40,28 @@ final class GuideViewModel {
     var filterText: String = ""
     var sourceStatus: [String: String] = [:]
     var isPlayerDetached = false
+    /// A saved recording taking over the player in place of the live channel.
+    var playingRecording: RecordingItem?
     var isGuideWindowVisible = false
     var areAdultChannelsUnlocked = false
     var vlcPlaybackGeneration = 0
+    var activeStreamURL: URL?
+    var audioDelayMs: Int = 0
     let player = AVPlayer()
+    let sharedVLCView = VLCVideoContainerView()
+    let sharedAVPlayerView = AVPlayerView()
+    private var volumeSaveTask: Task<Void, Never>?
     var volume: Double = 0.8 {
         didSet {
             player.volume = Float(volume)
-            settingsStore.update { $0.volume = volume }
+            sharedVLCView.setVolume(volume)
+            guard volume != settingsStore.settings.volume else { return }
+            volumeSaveTask?.cancel()
+            volumeSaveTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard !Task.isCancelled, let self else { return }
+                self.settingsStore.update { $0.volume = self.volume }
+            }
         }
     }
 
@@ -52,6 +71,9 @@ final class GuideViewModel {
     private let localAPIServer: LocalAPIServer
     private let displaySleepPreventer = DisplaySleepPreventer()
     private var playbackStalledObserver: NSObjectProtocol?
+    private var avWatchdogTimer: Timer?
+    private var lastAVPlayheadSeconds: Double = -1
+    private var lastAVProgressTime = Date()
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var playerRateObserver: NSKeyValueObservation?
     private var playerTimeObserver: Any?
@@ -61,6 +83,8 @@ final class GuideViewModel {
     private(set) var hasPerformedInitialRefresh = false
     private let floatingPlayerWindowController = FloatingPlayerWindowController()
     private let settingsWindowController = SettingsWindowController()
+    private let recordingsWindowController = RecordingsWindowController()
+    let recordingManager: RecordingManager
 
     init(
         repository: GuideRepository = GuideRepository(),
@@ -72,15 +96,64 @@ final class GuideViewModel {
         self.settingsStore = settingsStore
         self.cacheStore = cacheStore
         self.localAPIServer = localAPIServer
+        self.recordingManager = RecordingManager(settingsStore: settingsStore)
         self.selectedChannelID = settingsStore.settings.lastSelectedChannelID
         self.volume = settingsStore.settings.volume
+        
+        self.recordingManager.currentlyWatchingChannelID = { [weak self] in
+            self?.selectedChannelID
+        }
+        self.recordingManager.currentProgrammeLookup = { [weak self] channelID in
+            guard let self else { return nil }
+            guard let channel = self.channels.first(where: { $0.id == channelID }) ?? self.allChannels.first(where: { $0.id == channelID }) else {
+                return nil
+            }
+            let now = Date()
+            let prog = channel.programmes.first(where: { $0.start <= now && $0.stop > now })
+                ?? channel.programmes.first(where: { $0.start >= now })
+                ?? GuideProgramme(
+                    id: "\(channel.id)|\(now.timeIntervalSinceReferenceDate)",
+                    channelID: channel.id,
+                    start: now,
+                    stop: now.addingTimeInterval(3600),
+                    title: channel.name,
+                    detail: nil,
+                    iconURL: nil
+                )
+            return (channel, prog)
+        }
+
         configurePlayer()
         player.volume = Float(volume)
+        sharedVLCView.onPlaybackStateChange = { [weak self] isPlaying in
+            self?.setVLCPlaybackState(isPlaying: isPlaying)
+        }
+        sharedVLCView.setVolume(volume)
+        sharedAVPlayerView.controlsStyle = .none
+        sharedAVPlayerView.videoGravity = .resizeAspect
+        sharedAVPlayerView.player = player
         localAPIServer.updatePort(settingsStore.settings.localAPIPort)
         localAPIServer.start()
         loadCachedGuide()
         configureAutoRefresh()
         publishLocalAPIState()
+
+        NotificationCenter.default.addObserver(
+            forName: .lanTVReconnectLiveStream,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let selectedChannel = self.selectedChannel else { return }
+                self.activeStreamURL = selectedChannel.streamURL
+                if self.usesVLCPlayback(for: selectedChannel) {
+                    self.sharedVLCView.play(url: selectedChannel.streamURL, forceReload: true)
+                } else {
+                    self.playSelectedChannel()
+                }
+            }
+        }
+
         Task { [weak self] in
             await self?.load()
         }
@@ -152,6 +225,7 @@ final class GuideViewModel {
             let mergedGuide = try await repository.load(settings: settingsStore.settings)
             allChannels = mergeWithCachedSourcesIfNeeded(freshGuide: mergedGuide, cachedGuide: cachedGuide).channels
             applyChannelFilters()
+            recordingManager.syncScheduledRecordings(with: allChannels)
             generatedAt = mergedGuide.generatedAt
             sourceStatus = mergedGuide.sourceStatus
             state = .loaded
@@ -201,6 +275,68 @@ final class GuideViewModel {
         settingsWindowController.show(viewModel: self)
     }
 
+    func openRecordingsWindow() {
+        recordingsWindowController.show(viewModel: self)
+    }
+
+    var isCurrentChannelRecording: Bool {
+        guard let selectedChannelID else { return false }
+        return recordingManager.activeRecording(for: selectedChannelID) != nil
+    }
+
+    var currentChannelRecordingItem: RecordingItem? {
+        guard let selectedChannelID else { return nil }
+        return recordingManager.activeRecording(for: selectedChannelID)
+    }
+
+    func toggleRecordingCurrentShow() {
+        guard let selectedChannel else { return }
+        if let active = recordingManager.activeRecording(for: selectedChannel.id) {
+            recordingManager.stopRecording(id: active.id)
+            return
+        }
+
+        let now = Date()
+        let programme = selectedChannel.programmes.first(where: { $0.start <= now && $0.stop > now })
+            ?? selectedChannel.programmes.first
+            ?? GuideProgramme(
+                id: "\(selectedChannel.id)|\(now.timeIntervalSinceReferenceDate)",
+                channelID: selectedChannel.id,
+                start: now,
+                stop: now.addingTimeInterval(3600),
+                title: selectedChannel.name,
+                detail: nil,
+                iconURL: nil
+            )
+
+        recordingManager.startRecording(
+            channel: selectedChannel,
+            programme: programme,
+            isLiveRollOver: settingsStore.settings.autoRecordNextShowOnSameChannel
+        )
+    }
+
+    func recordingItem(for programme: GuideProgramme) -> RecordingItem? {
+        recordingManager.recordingItem(forProgrammeID: programme.id)
+    }
+
+    func toggleScheduleRecording(channel: GuideChannel, programme: GuideProgramme) {
+        if let existing = recordingManager.recordingItem(forProgrammeID: programme.id) {
+            if existing.status == .recording {
+                recordingManager.stopRecording(id: existing.id)
+            } else if existing.status == .scheduled {
+                recordingManager.cancelRecording(id: existing.id)
+            }
+        } else {
+            let now = Date()
+            if programme.start <= now && programme.stop > now {
+                recordingManager.startRecording(channel: channel, programme: programme)
+            } else {
+                recordingManager.scheduleRecording(channel: channel, programme: programme)
+            }
+        }
+    }
+
     func fetchChannels(for source: GuideSource) async throws -> [GuideChannel] {
         try await repository.fetchChannels(for: source)
     }
@@ -214,12 +350,30 @@ final class GuideViewModel {
     }
 
     func selectChannel(_ channel: GuideChannel) {
+        if selectedChannelID != channel.id {
+            activeStreamURL = nil
+            resetAudioDelay()
+        }
         selectedChannelID = channel.id
         settingsStore.update { $0.lastSelectedChannelID = channel.id }
         playSelectedChannel()
         if isPlayerDetached {
             floatingPlayerWindowController.show(viewModel: self)
         }
+    }
+
+    func adjustAudioDelay(byMilliseconds deltaMs: Int) {
+        audioDelayMs += deltaMs
+        NotificationCenter.default.post(
+            name: .lanTVAdjustAudioDelay,
+            object: nil,
+            userInfo: ["delta": deltaMs * 1000]
+        )
+    }
+
+    func resetAudioDelay() {
+        audioDelayMs = 0
+        NotificationCenter.default.post(name: .lanTVResetAudioDelay, object: nil)
     }
 
     func togglePlayPause() {
@@ -233,8 +387,8 @@ final class GuideViewModel {
     func resumePlayback() {
         guard let selectedChannel else { return }
         if usesVLCPlayback(for: selectedChannel) {
-            vlcPlaybackGeneration += 1
             isPlaying = true
+            sharedVLCView.resume()
         } else {
             if player.currentItem == nil {
                 playSelectedChannel()
@@ -249,7 +403,8 @@ final class GuideViewModel {
     func pausePlayback() {
         guard let selectedChannel else { return }
         if usesVLCPlayback(for: selectedChannel) {
-            stopPlayback()
+            sharedVLCView.pause()
+            isPlaying = false
         } else {
             player.pause()
             isPlaying = false
@@ -257,8 +412,37 @@ final class GuideViewModel {
         publishLocalAPIState()
     }
 
+    func playRecording(_ recording: RecordingItem) {
+        guard FileManager.default.fileExists(atPath: recording.outputFilePath) else { return }
+        playingRecording = recording
+        sharedVLCView.stop()
+        NotificationCenter.default.post(name: .lanTVStopPlayback, object: nil)
+        currentItemObservers = []
+        isLiveStream = false
+        isAtLiveEdge = true
+        secondsBehindLive = 0
+        lastKnownBehindLive = nil
+        lastAVProgressTime = Date()
+        lastAVPlayheadSeconds = -1
+        player.replaceCurrentItem(with: AVPlayerItem(url: URL(fileURLWithPath: recording.outputFilePath)))
+        player.play()
+        isPlaying = true
+        if isPlayerDetached {
+            floatingPlayerWindowController.show(viewModel: self)
+        }
+        publishLocalAPIState()
+    }
+
+    func stopRecordingPlayback() {
+        guard playingRecording != nil else { return }
+        playingRecording = nil
+        playSelectedChannel()
+    }
+
     func stopPlayback() {
+        playingRecording = nil
         stopNativePlayback()
+        sharedVLCView.stop()
         isPlaying = false
         NotificationCenter.default.post(name: .lanTVStopPlayback, object: nil)
         publishLocalAPIState()
@@ -276,7 +460,8 @@ final class GuideViewModel {
         guard !isPlayerDetached, let selectedChannel else { return }
 
         if usesVLCPlayback(for: selectedChannel) {
-            vlcPlaybackGeneration += 1
+            isPlaying = true
+            NotificationCenter.default.post(name: .lanTVResumePlayback, object: nil)
         } else {
             playSelectedChannel()
         }
@@ -326,31 +511,17 @@ final class GuideViewModel {
     }
 
     func undockPlayer() {
-        guard let selectedChannel else { return }
+        guard selectedChannel != nil else { return }
         isPlayerDetached = true
         floatingPlayerWindowController.show(viewModel: self)
         publishLocalAPIState()
-        if usesVLCPlayback(for: selectedChannel) {
-            vlcPlaybackGeneration += 1
-            isPlaying = true
-        } else {
-            player.play()
-            isPlaying = true
-        }
     }
 
     func dockPlayer() {
-        guard let selectedChannel else { return }
+        guard selectedChannel != nil else { return }
         isPlayerDetached = false
         floatingPlayerWindowController.close()
         publishLocalAPIState()
-        if usesVLCPlayback(for: selectedChannel) {
-            vlcPlaybackGeneration += 1
-            isPlaying = true
-        } else {
-            player.play()
-            isPlaying = true
-        }
     }
 
     func togglePlayerDocking() {
@@ -366,13 +537,44 @@ final class GuideViewModel {
         floatingPlayerWindowController.show(viewModel: self)
     }
 
+    var isFullScreen: Bool {
+        isPlayerDetached && floatingPlayerWindowController.isFullScreen
+    }
+
+    func toggleFullScreen() {
+        guard selectedChannel != nil else { return }
+        if isPlayerDetached && floatingPlayerWindowController.isFullScreen {
+            floatingPlayerWindowController.exitFullScreen()
+        } else {
+            enterFullScreen()
+        }
+    }
+
+    func enterFullScreen() {
+        guard selectedChannel != nil else { return }
+        if !isPlayerDetached {
+            undockPlayer()
+            DispatchQueue.main.async { [weak self] in
+                self?.floatingPlayerWindowController.enterFullScreen(fromDocked: true)
+            }
+        } else {
+            floatingPlayerWindowController.enterFullScreen(fromDocked: false)
+        }
+    }
+
+    func exitFullScreen() {
+        floatingPlayerWindowController.exitFullScreen()
+    }
+
     func floatingPlayerWindowDidClose() {
         isPlayerDetached = false
         stopPlayback()
         publishLocalAPIState()
     }
 
+    /// VLCKit is only needed for raw MPEG-TS streams (e.g. HDHomeRun); everything else uses AVPlayer.
     func usesVLCPlayback(for channel: GuideChannel) -> Bool {
+        if playingRecording != nil { return false }
         let pathExtension = channel.streamURL.pathExtension.lowercased()
         if ["m3u8", "mp4", "m4v", "mov"].contains(pathExtension) {
             return false
@@ -383,17 +585,14 @@ final class GuideViewModel {
             return true
         }
 
-        if channel.streamURL.query?.lowercased().contains("channel=") == true {
-            return true
-        }
-
-        return true
+        return channel.streamURL.query?.lowercased().contains("channel=") == true
     }
 
     private func loadCachedGuide() {
         guard let cachedGuide = cacheStore.load() else { return }
         allChannels = cachedGuide.channels
         channels = filterChannels(allChannels)
+        recordingManager.syncScheduledRecordings(with: allChannels)
         generatedAt = cachedGuide.generatedAt
         sourceStatus = cachedGuide.sourceStatus
         state = .loaded
@@ -542,12 +741,16 @@ final class GuideViewModel {
     }
 
     func seekToLive() {
+        if playingRecording != nil {
+            stopRecordingPlayback()
+            return
+        }
         guard let selectedChannel else { return }
         if usesVLCPlayback(for: selectedChannel) {
-            vlcPlaybackGeneration += 1
             isPlaying = true
             isAtLiveEdge = true
             secondsBehindLive = 0
+            NotificationCenter.default.post(name: .lanTVResumePlayback, object: nil)
             return
         }
 
@@ -564,29 +767,39 @@ final class GuideViewModel {
 
     private func playSelectedChannel() {
         guard let selectedChannel else { return }
-        guard !usesVLCPlayback(for: selectedChannel) else {
-            stopNativePlayback()
-            vlcPlaybackGeneration += 1
-            isPlaying = true
-            isLiveStream = true
-            isAtLiveEdge = true
-            secondsBehindLive = 0
-            publishLocalAPIState()
+        playingRecording = nil
+        self.activeStreamURL = selectedChannel.streamURL
+
+        guard !self.usesVLCPlayback(for: selectedChannel) else {
+            self.stopNativePlayback()
+            self.isPlaying = true
+            self.isLiveStream = true
+            self.isAtLiveEdge = true
+            self.secondsBehindLive = 0
+            if self.sharedVLCView.currentURL != selectedChannel.streamURL {
+                self.sharedVLCView.play(url: selectedChannel.streamURL)
+            }
+            self.publishLocalAPIState()
             return
         }
 
+        self.sharedVLCView.stop()
+
         NotificationCenter.default.post(name: .lanTVStopPlayback, object: nil)
-        isLiveStream = false
-        isAtLiveEdge = true
-        secondsBehindLive = 0
-        lastKnownBehindLive = nil
+        self.isLiveStream = false
+        self.isAtLiveEdge = true
+        self.secondsBehindLive = 0
+        self.lastKnownBehindLive = nil
         let asset = AVURLAsset(url: selectedChannel.streamURL)
         let item = AVPlayerItem(asset: asset)
-        configureItem(item)
-        player.replaceCurrentItem(with: item)
-        player.play()
-        isPlaying = true
-        publishLocalAPIState()
+        self.configureItem(item)
+        NSLog("[AVPlayer] loading %@", selectedChannel.streamURL.host ?? "?")
+        self.lastAVProgressTime = Date()
+        self.lastAVPlayheadSeconds = -1
+        self.player.replaceCurrentItem(with: item)
+        self.player.play()
+        self.isPlaying = true
+        self.publishLocalAPIState()
     }
 
     private func stopNativePlayback() {
@@ -635,6 +848,10 @@ final class GuideViewModel {
             }
         }
 
+        avWatchdogTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkNativePlaybackProgress() }
+        }
+
         playbackStalledObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemPlaybackStalled,
             object: nil,
@@ -646,22 +863,42 @@ final class GuideViewModel {
                 stalledItem == self.player.currentItem
             else { return }
 
-            if self.isLiveStream && self.secondsBehindLive > 8 {
-                self.seekToLive()
-            } else {
-                self.player.play()
-            }
+            // Resume playback smoothly when buffer refills without destroying the stream buffer by seeking
+            self.player.play()
+        }
+    }
+
+    /// AVPlayer can wedge on a live window it has fallen behind (neither LIVE nor play recovers it),
+    /// so reload the stream when the playhead has not moved while playback is supposed to be running.
+    private func checkNativePlaybackProgress() {
+        guard playingRecording == nil, let selectedChannel, !usesVLCPlayback(for: selectedChannel),
+              isPlaying, player.currentItem != nil else {
+            lastAVProgressTime = Date()
+            return
+        }
+        let now = player.currentTime().seconds
+        if now.isFinite, abs(now - lastAVPlayheadSeconds) > 0.25 {
+            lastAVPlayheadSeconds = now
+            lastAVProgressTime = Date()
+            return
+        }
+        if Date().timeIntervalSince(lastAVProgressTime) > 12 {
+            NSLog("[AVPlayer] playhead stuck at %.1f for >12s, reloading stream", now)
+            lastAVProgressTime = Date()
+            lastAVPlayheadSeconds = -1
+            playSelectedChannel()
         }
     }
 
     private func configureItem(_ item: AVPlayerItem) {
         currentItemObservers = []
 
+        // Maintain a healthy forward buffer so that network latency and stream discontinuities don't starve playback
         item.preferredForwardBufferDuration = 0
-        item.automaticallyPreservesTimeOffsetFromLive = true
+        item.automaticallyPreservesTimeOffsetFromLive = false
         item.configuredTimeOffsetFromLive = CMTime(seconds: 4, preferredTimescale: 1)
         item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
-        item.preferredMaximumResolution = CGSize(width: 1280, height: 720)
+        item.preferredMaximumResolution = CGSize(width: 1920, height: 1080)
 
         currentItemObservers.append(
             item.observe(\.isPlaybackLikelyToKeepUp, options: [.new]) { [weak self] item, _ in
@@ -675,6 +912,7 @@ final class GuideViewModel {
         currentItemObservers.append(
             item.observe(\.status, options: [.new]) { [weak self] item, _ in
                 guard let self else { return }
+                NSLog("[AVPlayer] item status=%ld error=%@ size=%@ rate=%f", item.status.rawValue, String(describing: item.error), NSStringFromSize(item.presentationSize), self.player.rate)
                 if item.status == .readyToPlay {
                     if self.player.rate == 0 {
                         self.player.play()
@@ -686,6 +924,10 @@ final class GuideViewModel {
     }
 
     private func updateLivePlaybackStatus(currentTime: CMTime) {
+        if playingRecording != nil {
+            if isLiveStream { isLiveStream = false }
+            return
+        }
         guard let selectedChannel, !usesVLCPlayback(for: selectedChannel) else {
             if isLiveStream {
                 isLiveStream = false
@@ -711,22 +953,11 @@ final class GuideViewModel {
         isLiveStream = true
         let behind = max(0, liveEnd - currentSeconds)
         secondsBehindLive = behind
-        let atLive = behind <= 10.0
+        let atLive = behind <= 18.0
         if isAtLiveEdge != atLive {
             isAtLiveEdge = atLive
         }
-
-        // Auto-recover if playback unexpectedly jumped backwards in time while playing.
-        // e.g. a stream discontinuity jumping back into earlier segments.
-        if isPlaying {
-            if let prev = lastKnownBehindLive, prev <= 15.0, behind >= 45.0 {
-                seekToLive()
-                return
-            }
-            lastKnownBehindLive = behind
-        } else {
-            lastKnownBehindLive = behind
-        }
+        lastKnownBehindLive = behind
     }
 
     private func updateDisplaySleepAssertion() {

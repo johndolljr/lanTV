@@ -73,8 +73,8 @@ final class LocalAPIServer: @unchecked Sendable {
     }
 
     func update(with context: LocalAPIExportContext) {
-        let rendered = LocalAPIExportRenderer.render(context: context)
         queue.async { [weak self] in
+            let rendered = LocalAPIExportRenderer.render(context: context)
             self?.payloads = rendered
         }
     }
@@ -257,6 +257,9 @@ private enum LocalAPIExportRenderer {
                 if let iconURL = programme.iconURL {
                     xml.append("    <icon src=\"\(escape(iconURL.absoluteString))\" />")
                 }
+                if let se = programme.formattedSeasonEpisode, !se.isEmpty {
+                    xml.append("    <episode-num system=\"onscreen\">\(escape(se))</episode-num>")
+                }
                 xml.append("  </programme>")
             }
         }
@@ -276,11 +279,15 @@ private enum LocalAPIExportRenderer {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private static func xmltvDate(_ date: Date) -> String {
+    private static let xmltvFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMddHHmmss Z"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func xmltvDate(_ date: Date) -> String {
+        return xmltvFormatter.string(from: date)
     }
 
     private static func escape(_ value: String) -> String {

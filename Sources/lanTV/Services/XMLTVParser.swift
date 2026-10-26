@@ -12,6 +12,8 @@ final class XMLTVParser: NSObject {
         case title
         case desc
         case icon
+        case subTitle = "sub-title"
+        case episodeNum = "episode-num"
     }
 
     private struct PartialChannel {
@@ -27,12 +29,17 @@ final class XMLTVParser: NSObject {
         var title: String?
         var detail: String?
         var iconURL: URL?
+        var subTitle: String?
+        var seasonEpisode: String?
+        var episodeSystemPriority: Int = 0
     }
 
     private enum TextTarget {
         case channelDisplayName
         case programmeTitle
         case programmeDescription
+        case programmeSubTitle
+        case programmeEpisodeNum
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -49,6 +56,7 @@ final class XMLTVParser: NSObject {
     private var currentProgramme: PartialProgramme?
     private var currentText = ""
     private var textTarget: TextTarget?
+    private var currentEpisodeSystem: String?
 
     func parse(data: Data) throws -> XMLTVGuide {
         channels = [:]
@@ -57,6 +65,7 @@ final class XMLTVParser: NSObject {
         currentProgramme = nil
         currentText = ""
         textTarget = nil
+        currentEpisodeSystem = nil
 
         let parser = XMLParser(data: data)
         parser.delegate = self
@@ -112,6 +121,11 @@ extension XMLTVParser: XMLParserDelegate {
             textTarget = .programmeTitle
         case .desc:
             textTarget = .programmeDescription
+        case .subTitle:
+            textTarget = .programmeSubTitle
+        case .episodeNum:
+            textTarget = .programmeEpisodeNum
+            currentEpisodeSystem = attributeDict["system"]
         case .icon:
             let url = attributeDict["src"].flatMap(URL.init(string:))
             if currentProgramme != nil {
@@ -152,6 +166,29 @@ extension XMLTVParser: XMLParserDelegate {
                 currentProgramme?.detail = trimmed
             }
             textTarget = nil
+        case .subTitle:
+            if case .programmeSubTitle = textTarget, !trimmed.isEmpty {
+                currentProgramme?.subTitle = trimmed
+            }
+            textTarget = nil
+        case .episodeNum:
+            if case .programmeEpisodeNum = textTarget, !trimmed.isEmpty {
+                let system = currentEpisodeSystem?.lowercased() ?? ""
+                let priority: Int
+                if system.contains("onscreen") {
+                    priority = 3
+                } else if system.contains("xmltv_ns") {
+                    priority = 2
+                } else {
+                    priority = 1
+                }
+                if priority >= (currentProgramme?.episodeSystemPriority ?? 0) {
+                    currentProgramme?.seasonEpisode = trimmed
+                    currentProgramme?.episodeSystemPriority = priority
+                }
+            }
+            textTarget = nil
+            currentEpisodeSystem = nil
         case .channel:
             if let currentChannel {
                 channels[currentChannel.id] = XMLTVChannel(
@@ -170,7 +207,9 @@ extension XMLTVParser: XMLParserDelegate {
                         stop: currentProgramme.stop,
                         title: currentProgramme.title,
                         detail: currentProgramme.detail,
-                        iconURL: currentProgramme.iconURL
+                        iconURL: currentProgramme.iconURL,
+                        seasonEpisode: currentProgramme.seasonEpisode,
+                        subTitle: currentProgramme.subTitle
                     )
                 )
             }

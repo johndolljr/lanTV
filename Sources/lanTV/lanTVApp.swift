@@ -19,6 +19,13 @@ struct LanTVApp: App {
                 }
                 .keyboardShortcut(",", modifiers: [.command])
             }
+            CommandGroup(after: .windowArrangement) {
+                Button(viewModel.isFullScreen ? "Exit Full Screen" : "Enter Full Screen") {
+                    viewModel.toggleFullScreen()
+                }
+                .keyboardShortcut("f", modifiers: [.control, .command])
+                .disabled(viewModel.selectedChannel == nil)
+            }
         }
 
         MenuBarExtra {
@@ -47,6 +54,21 @@ private struct MenuBarControls: View {
                 Text("API on \(viewModel.localAPIBaseURLString)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let channel = viewModel.selectedChannel,
+                   let now = channel.programmes.first(where: { $0.start <= Date() && Date() < $0.stop }) {
+                    HStack(spacing: 4) {
+                        Text("\(channel.name): \(now.title)")
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        if let se = now.formattedSeasonEpisode {
+                            Text(se)
+                                .font(.caption2.bold())
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
             }
 
             Divider()
