@@ -15,15 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.02, green: 0.04, blue: 0.08),
-                    Color(red: 0.04, green: 0.07, blue: 0.12),
-                    Color(red: 0.03, green: 0.06, blue: 0.10)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            LanTVDesignSystem.backgroundGradient
             .ignoresSafeArea()
 
             VStack(spacing: 16) {
@@ -217,7 +209,7 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 26))
         .overlay {
             RoundedRectangle(cornerRadius: 26)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
         }
         .background {
             Button("") {
@@ -241,6 +233,9 @@ struct ContentView: View {
             .textFieldStyle(.plain)
             .font(.system(size: 13))
             .focused($isFilterFieldFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(isFilterFieldFocused ? LanTVDesignSystem.accent.opacity(0.3) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .onExitCommand {
                 if !viewModel.filterText.isEmpty {
                     viewModel.updateFilterText("")
@@ -270,21 +265,19 @@ struct ContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(0.07),
-                    Color.white.opacity(0.03)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(Capsule())
-        .overlay {
-            Capsule()
-                .strokeBorder(isFilterFieldFocused ? Color.accentColor.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1)
+        .background {
+            if !isFilterFieldFocused {
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.07),
+                        Color.white.opacity(0.03)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .frame(minWidth: 100, maxWidth: 280)
     }
 
@@ -330,7 +323,7 @@ struct ContentView: View {
         .clipShape(Capsule())
         .overlay {
             Capsule()
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
         }
     }
 
@@ -423,7 +416,7 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 26))
             .overlay {
                 RoundedRectangle(cornerRadius: 26)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
             }
             .onChange(of: viewModel.selectedChannelID) { _, newID in
                 guard let newID else { return }
@@ -445,7 +438,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             ZStack(alignment: .leading) {
                 Rectangle()
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(LanTVDesignSystem.panel)
                 HStack {
                     Text("Channels")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -477,7 +470,7 @@ struct ContentView: View {
 
             ZStack(alignment: .topLeading) {
                 Rectangle()
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(LanTVDesignSystem.panel)
 
                 ForEach(timeline.hourMarks, id: \.self) { mark in
                     let x = timeline.xOffset(for: mark, minuteWidth: minuteWidth)
@@ -519,14 +512,7 @@ struct ContentView: View {
     }
 
     fileprivate var panelBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.08),
-                Color.white.opacity(0.04)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        LanTVDesignSystem.panelGradient
     }
 }
 
@@ -753,11 +739,16 @@ struct SelectedChannelPlayerPanel: View {
         }
         .padding(dockMode == .floating ? 14 : 20)
         .frame(maxWidth: .infinity, maxHeight: dockMode == .floating ? .infinity : nil)
-        .background(panelBackground)
+        .background {
+            ZStack {
+                LanTVDesignSystem.panelGradient
+                LanTVSignalWave()
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: dockMode == .floating ? 18 : 26))
         .overlay {
             RoundedRectangle(cornerRadius: dockMode == .floating ? 18 : 26)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
         }
     }
 
@@ -773,16 +764,6 @@ struct SelectedChannelPlayerPanel: View {
         "\(programme.start.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)).minute())) - \(programme.stop.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)).minute()))"
     }
 
-    private var panelBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color.white.opacity(0.08),
-                Color.white.opacity(0.04)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 }
 
 struct CompactVolumeControl: View {
@@ -832,7 +813,7 @@ struct CompactVolumeControl: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
         }
     }
 }
@@ -970,7 +951,7 @@ struct FloatingChromeIconButton: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
         }
         .disabled(!isEnabled)
     }
@@ -995,7 +976,7 @@ struct AirPlayChromeControl: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
             }
             .opacity(isEnabled ? 1.0 : 0.45)
             .allowsHitTesting(isEnabled)
@@ -1082,22 +1063,16 @@ private struct GuideChannelRow: View {
             .padding(.horizontal, 12)
         }
         .buttonStyle(.plain)
-        .background(
-            LinearGradient(
-                colors: isSelected
-                    ? [Color.white.opacity(0.14), Color.white.opacity(0.08)]
-                    : [Color.white.opacity(0.08), Color.white.opacity(0.04)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(isSelected ? LanTVDesignSystem.liveProgrammeGradient : LanTVDesignSystem.programmeGradient, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isSelected ? LanTVDesignSystem.accent : LanTVDesignSystem.panelBorder.opacity(0.45), lineWidth: 1))
+        .padding(.vertical, 3).padding(.trailing, 4)
         .frame(width: channelColumnWidth, height: rowHeight)
     }
 
     private var programmeLane: some View {
         ZStack(alignment: .leading) {
             Rectangle()
-                .fill(Color(nsColor: .textBackgroundColor))
+                .fill(LanTVDesignSystem.background.opacity(0.6))
 
             ForEach(timeline.hourMarks, id: \.self) { mark in
                 Rectangle()
@@ -1105,11 +1080,6 @@ private struct GuideChannelRow: View {
                     .frame(width: 1)
                     .offset(x: timeline.xOffset(for: mark, minuteWidth: minuteWidth))
             }
-
-            Rectangle()
-                .fill(Color.red.opacity(0.7))
-                .frame(width: 2)
-                .offset(x: timeline.xOffset(for: currentTime, minuteWidth: minuteWidth))
 
             ForEach(programmesInTimeline) { programme in
                 GuideProgrammeBlock(
@@ -1127,6 +1097,12 @@ private struct GuideChannelRow: View {
                     onOpenRecordings: onOpenRecordings
                 )
             }
+            Rectangle()
+                .fill(LanTVDesignSystem.mint)
+                .frame(width: 2)
+                .shadow(color: LanTVDesignSystem.mint.opacity(0.8), radius: 5)
+                .offset(x: timeline.xOffset(for: currentTime, minuteWidth: minuteWidth))
+                .allowsHitTesting(false)
         }
         .frame(width: timeline.width(minuteWidth: minuteWidth), height: rowHeight)
     }
@@ -1207,7 +1183,7 @@ private struct GuideProgrammeBlock: View {
             .background(background)
             .overlay {
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(isCurrent ? Color.white.opacity(0.75) : Color.white.opacity(0.12), lineWidth: isCurrent ? 1.5 : 1)
+                    .strokeBorder(isCurrent ? LanTVDesignSystem.accent.opacity(0.65) : LanTVDesignSystem.panelBorder.opacity(0.45), lineWidth: 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -1254,13 +1230,7 @@ private struct GuideProgrammeBlock: View {
     }
 
     private var background: some ShapeStyle {
-        LinearGradient(
-            colors: isCurrent
-                ? [Color(red: 0.20, green: 0.47, blue: 1.0), Color(red: 0.46, green: 0.24, blue: 1.0)]
-                : [Color(red: 0.07, green: 0.45, blue: 0.62), Color(red: 0.05, green: 0.27, blue: 0.40)],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+        isCurrent ? LanTVDesignSystem.liveProgrammeGradient : LanTVDesignSystem.programmeGradient
     }
 
     private var timeLabel: String {
@@ -1294,10 +1264,10 @@ private struct ChromeButtonStyle: ButtonStyle {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(background(isPressed: configuration.isPressed))
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1)
             }
             .foregroundStyle(.white)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
@@ -1309,8 +1279,8 @@ private struct ChromeButtonStyle: ButtonStyle {
         case .primary:
             return LinearGradient(
                 colors: [
-                    Color(red: 0.13, green: 0.53, blue: 1.0).opacity(isPressed ? 0.75 : 1),
-                    Color(red: 0.42, green: 0.22, blue: 1.0).opacity(isPressed ? 0.70 : 0.92)
+                    LanTVDesignSystem.accent.opacity(isPressed ? 0.78 : 1),
+                    LanTVDesignSystem.violet.opacity(isPressed ? 0.72 : 0.92)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing

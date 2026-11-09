@@ -1,9 +1,9 @@
 import SwiftUI
 
 private enum MobileTheme {
-    static let background = Color(red: 0.025, green: 0.045, blue: 0.09)
-    static let panel = Color(red: 0.065, green: 0.095, blue: 0.15)
-    static let accent = LinearGradient(colors: [Color(red: 0.13, green: 0.53, blue: 1), Color(red: 0.42, green: 0.22, blue: 1)], startPoint: .leading, endPoint: .trailing)
+    static let background = LanTVDesignSystem.background
+    static let panel = LanTVDesignSystem.panel
+    static let accent = LanTVDesignSystem.accentGradient
 }
 struct MobileContentView: View {
     @Bindable var store: MobileStore
@@ -12,20 +12,21 @@ struct MobileContentView: View {
     @FocusState private var searchFocused: Bool
     var body: some View {
         GeometryReader { geometry in
-            let wide = geometry.size.width >= 760
+            let usesGuideGrid = geometry.size.width >= 760 || UIDevice.current.userInterfaceIdiom == .pad
             NavigationStack {
                 VStack(spacing: 16) {
-                    if wide {
+                    if usesGuideGrid {
                         wideNowPlaying(width: geometry.size.width)
-                        timeline.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        timeline(availableWidth: geometry.size.width - 68)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         header(wide: false)
                         channelList(wide: false)
                     }
                 }
-                .padding(wide ? 16 : 14)
+                .padding(usesGuideGrid ? 16 : 14)
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-                .background(MobileTheme.background.ignoresSafeArea())
+                .background(LanTVDesignSystem.backgroundGradient.ignoresSafeArea())
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
@@ -35,16 +36,23 @@ struct MobileContentView: View {
                     }
                 }
                 .onChange(of: store.selectedChannel?.id) { _, id in
-                    if !wide, id != nil { showPlayer = true }
+                    if !usesGuideGrid, id != nil { showPlayer = true }
                 }
                 .sheet(isPresented: $showSettings) { MobileSettingsView(store: store) }
                 .sheet(isPresented: $showPlayer) {
                     NavigationStack {
                         ScrollView { playerPanel(expanded: true).padding(16) }
-                            .background(MobileTheme.background.ignoresSafeArea())
+                            .background(LanTVDesignSystem.backgroundGradient.ignoresSafeArea())
                             .navigationTitle("Now Watching")
                             .navigationBarTitleDisplayMode(.inline)
-                            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showPlayer = false } } }
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("Close") {
+                                        store.stopPlayback()
+                                        showPlayer = false
+                                    }
+                                }
+                            }
                     }
                 }
                 .alert("Unable to Play", isPresented: Binding(get: { store.playerError != nil }, set: { if !$0 { store.playerError = nil } })) { Button("OK") { store.playerError = nil } } message: { Text(store.playerError ?? "") }
@@ -100,9 +108,17 @@ struct MobileContentView: View {
     private func header(wide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("lanTV").font(.system(size: wide ? 34 : 30, weight: .bold, design: .rounded))
-                    Text("Your guide. Every screen.").font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+                HStack(spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11).fill(LanTVDesignSystem.accentGradient)
+                        Image(systemName: "play.rectangle.on.rectangle.fill").font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
+                    }
+                    .frame(width: 38, height: 38)
+                    .shadow(color: LanTVDesignSystem.accent.opacity(0.45), radius: 10)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("lanTV").font(.system(size: wide ? 34 : 27, weight: .bold, design: .rounded))
+                        Text("Your guide. Every screen.").font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 if store.isLoading { ProgressView().controlSize(.small) }
@@ -122,8 +138,13 @@ struct MobileContentView: View {
             }
             Text(store.status).font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary).lineLimit(3)
         }
-        .padding(16).background(MobileTheme.panel, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.08)))
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 22).fill(LanTVDesignSystem.panelGradient)
+                .overlay { LanTVSignalWave().clipShape(RoundedRectangle(cornerRadius: 22)) }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65)))
     }
     private func channelList(wide: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -140,8 +161,11 @@ struct MobileContentView: View {
                         .focused($searchFocused)
                         .submitLabel(.search)
                         .onSubmit { searchFocused = false }
+                        .padding(.horizontal, 7).padding(.vertical, 5)
+                        .background(searchFocused ? LanTVDesignSystem.accent.opacity(0.3) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                         .accessibilityIdentifier("mobile-search")
-                }.padding(12).background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+                }.padding(8)
+                    .background(searchFocused ? Color.clear : Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
             }
             if store.channels.isEmpty {
                 ContentUnavailableView {
@@ -168,62 +192,94 @@ struct MobileContentView: View {
                 .refreshable { store.refresh() }
             }
         }
-        .padding(14).background(MobileTheme.panel.opacity(0.7), in: RoundedRectangle(cornerRadius: 20))
+        .padding(14)
+        .background(LanTVDesignSystem.panelGradient, in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65)))
     }
     private func wideNowPlaying(width: CGFloat) -> some View {
-        HStack(spacing: 22) {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(alignment: .center, spacing: 14) {
-                    Text("lanTV").font(.system(size: 28, weight: .bold, design: .rounded))
-                    if store.sources.count > 1 {
-                        Menu {
-                            ForEach(store.sources) { source in Button(source.name) { store.chooseSource(source.id) } }
-                        } label: {
-                            Label(store.selectedSource?.name ?? "Source", systemImage: "server.rack").lineLimit(1)
-                        }.font(.system(size: 12, weight: .semibold, design: .rounded))
-                    } else {
-                        Label(store.selectedSource?.name ?? "No guide source", systemImage: "server.rack")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded)).lineLimit(1)
-                    }
-                    if store.isLoading { ProgressView().controlSize(.small) }
-                    Spacer(minLength: 0)
-                    Button { store.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                        .buttonStyle(MobileChromeStyle()).accessibilityLabel("Refresh guide")
-                    Button { showSettings = true } label: { Image(systemName: "slider.horizontal.3") }
-                        .buttonStyle(MobileChromeStyle(primary: true)).accessibilityLabel("Settings").accessibilityIdentifier("mobile-settings")
+        HStack(alignment: .center, spacing: 20) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11).fill(LanTVDesignSystem.accentGradient)
+                    Image(systemName: "play.rectangle.on.rectangle.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                }.frame(width: 36, height: 34)
+                Text("lanTV").font(.system(size: 27, weight: .bold, design: .rounded)).tracking(-0.5)
+                HStack(spacing: 6) {
+                    Circle().fill(store.isUsingOfflineCache ? .orange : (store.selectedSource == nil ? .gray : LanTVDesignSystem.mint)).frame(width: 7, height: 7)
+                    Text(store.selectedSource == nil ? "Searching" : (store.isUsingOfflineCache ? "Offline guide" : store.selectedSource?.name ?? "Connected"))
+                        .lineLimit(1)
                 }
-                HStack(spacing: 9) {
-                    Text(store.selectedChannel?.number ?? "LIVE")
-                        .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit()).foregroundStyle(.blue)
-                    Text(store.selectedChannel?.name ?? "Choose a channel from the guide")
-                        .font(.system(size: 22, weight: .bold, design: .rounded)).lineLimit(1)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 9).padding(.vertical, 7)
+                .background(Color(red: 0.10, green: 0.15, blue: 0.28), in: Capsule())
+                if store.isLoading { ProgressView().controlSize(.small) }
+                Spacer(minLength: 8)
+                if store.sources.count > 1 {
+                    Menu {
+                        ForEach(store.sources) { source in Button(source.name) { store.chooseSource(source.id) } }
+                    } label: { Label("Sources", systemImage: "server.rack") }
+                        .buttonStyle(MobileChromeStyle())
+                } else {
+                    Button { showSettings = true } label: { Label("Sources", systemImage: "server.rack") }
+                        .buttonStyle(MobileChromeStyle())
                 }
-                Text(store.selectedChannel?.nowPlaying?.title ?? "Ready to watch")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded)).lineLimit(1)
-                if let detail = store.selectedChannel?.nowPlaying?.detail, !detail.isEmpty {
-                    Text(detail).font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.secondary).lineLimit(2)
-                }
-                HStack(spacing: 12) {
-                    if let programme = store.selectedChannel?.nowPlaying {
-                        Label("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
+                Button { store.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    .buttonStyle(MobileChromeStyle()).accessibilityLabel("Refresh guide")
+                TextField("Search", text: $store.search)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .focused($searchFocused).submitLabel(.search)
+                    .onSubmit { searchFocused = false }
+                    .padding(.horizontal, 8).padding(.vertical, 7)
+                    .background(searchFocused ? LanTVDesignSystem.accent.opacity(0.3) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                    .frame(width: min(250, max(120, width * 0.15)))
+                    .accessibilityIdentifier("mobile-search")
+                Button { showSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+                    .buttonStyle(MobileChromeStyle()).accessibilityIdentifier("mobile-settings")
+            }
+
+            HStack(spacing: 22) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 9) {
+                        Circle().fill(LanTVDesignSystem.mint.opacity(0.45)).frame(width: 17, height: 17)
+                        Text(store.selectedChannel?.name ?? "Choose a channel from the guide")
+                            .font(.system(size: 23, weight: .bold, design: .rounded)).lineLimit(1)
                     }
-                    if let next = store.selectedChannel?.upcoming.first(where: { $0.start > Date() }) {
-                        Text("Up next · \(next.title)").lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                }.font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
-                HStack(spacing: 8) {
+                    Text(store.selectedChannel?.nowPlaying?.title ?? "Ready to watch")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded)).lineLimit(1)
+                    HStack(spacing: 12) {
+                        if let programme = store.selectedChannel?.nowPlaying {
+                            Label("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
+                        }
+                        if let next = store.selectedChannel?.upcoming.first(where: { $0.start > Date() }) {
+                            Text("Up next · \(next.title)").lineLimit(1)
+                        }
+                    }.font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
                     Text(store.status).font(.system(size: 10, weight: .medium, design: .rounded)).foregroundStyle(.secondary).lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if width < 1000 {
+                    MobilePlayerView(store: store, miniPlayer: true)
+                        .frame(width: min(300, width * 0.30))
+                        .accessibilityIdentifier("ipad-mini-player")
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            MobilePlayerView(store: store)
-                .frame(width: min(360, width * 0.32))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        if width >= 1000 {
+            MobilePlayerView(store: store, miniPlayer: true)
+                .frame(width: min(360, width * 0.25))
                 .accessibilityIdentifier("ipad-mini-player")
         }
-        .padding(14)
-        .background(MobileTheme.panel, in: RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.08)))
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 22).fill(LanTVDesignSystem.panelGradient)
+                .overlay { LanTVSignalWave().clipShape(RoundedRectangle(cornerRadius: 22)) }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65)))
     }
     private func channelRow(_ channel: MobileChannel) -> some View {
         HStack(spacing: 12) {
@@ -245,20 +301,20 @@ struct MobileContentView: View {
             Spacer(minLength: 0)
             Image(systemName: "play.circle.fill").font(.system(size: 22)).foregroundStyle(.blue)
         }
-        .padding(12).background(.white.opacity(store.selectedChannel?.id == channel.id ? 0.1 : 0.04), in: RoundedRectangle(cornerRadius: 15))
+        .padding(12)
+        .background(store.selectedChannel?.id == channel.id ? LanTVDesignSystem.liveProgrammeGradient : LanTVDesignSystem.programmeGradient, in: RoundedRectangle(cornerRadius: 15))
+        .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(store.selectedChannel?.id == channel.id ? LanTVDesignSystem.accent.opacity(0.8) : LanTVDesignSystem.panelBorder.opacity(0.4)))
         .contentShape(RoundedRectangle(cornerRadius: 15))
     }
     private func playerPanel(expanded: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            MobilePlayerView(store: store)
+            MobilePlayerView(store: store, miniPlayer: true)
             if let channel = store.selectedChannel {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(channel.name).font(.system(size: 20, weight: .bold, design: .rounded))
                         Text(channel.nowPlaying?.title ?? "Live TV").font(.subheadline).foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Button { store.stopPlayback() } label: { Image(systemName: "stop.fill") }.buttonStyle(MobileChromeStyle()).accessibilityLabel("Stop playback")
                 }
                 if expanded, let current = channel.nowPlaying {
                     Text(current.detail).font(.subheadline).foregroundStyle(.secondary)
@@ -275,36 +331,24 @@ struct MobileContentView: View {
             }
         }
     }
-    private var timeline: some View {
+    private func timeline(availableWidth: CGFloat) -> some View {
         let origin = Calendar.current.dateInterval(of: .hour, for: Date())?.start ?? Date()
-        let visibleHours = 8
+        let visibleHours = 3
         let end = origin.addingTimeInterval(Double(visibleHours) * 3600)
-        let pointsPerSecond: CGFloat = 0.06
         let channelColumnWidth: CGFloat = 136
-        let timelineWidth = CGFloat(visibleHours * 3600) * pointsPerSecond
+        let timelineWidth = max(1, availableWidth - channelColumnWidth - 24)
+        let pointsPerSecond = timelineWidth / CGFloat(visibleHours * 3600)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("TV Guide").font(.system(size: 22, weight: .bold, design: .rounded))
+                    Text("The Guide").font(.system(size: 22, weight: .bold, design: .rounded))
                     Text("\(store.filteredChannels.count) channels").font(.caption).foregroundStyle(.secondary)
                 }
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search channels & shows", text: $store.search)
-                        .textFieldStyle(.plain).font(.subheadline)
-                        .focused($searchFocused).submitLabel(.search)
-                        .onSubmit { searchFocused = false }
-                        .accessibilityIdentifier("mobile-search")
-                    if !store.search.isEmpty {
-                        Button { store.search = ""; searchFocused = false } label: { Image(systemName: "xmark.circle.fill") }
-                            .buttonStyle(.plain).accessibilityLabel("Clear guide search")
-                    }
-                }
-                .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-                .frame(maxWidth: 320)
                 Spacer(minLength: 0)
-                Label("Live", systemImage: "dot.radiowaves.left.and.right").font(.caption).foregroundStyle(.blue)
+                Label("Live Guide", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption.weight(.semibold)).foregroundStyle(LanTVDesignSystem.mint)
+                    .padding(.horizontal, 11).padding(.vertical, 7)
+                    .background(LanTVDesignSystem.mint.opacity(0.1), in: Capsule())
             }
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(alignment: .leading, spacing: 8) {
@@ -323,7 +367,11 @@ struct MobileContentView: View {
                                     Text(channel.number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                     Text(channel.name).font(.system(size: 13, weight: .semibold, design: .rounded)).lineLimit(2)
                                 }.frame(width: 120, height: 64, alignment: .leading).padding(.horizontal, 8)
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                            .background(store.selectedChannel?.id == channel.id ? LanTVDesignSystem.liveProgrammeGradient : LanTVDesignSystem.programmeGradient, in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(store.selectedChannel?.id == channel.id ? LanTVDesignSystem.accent : LanTVDesignSystem.panelBorder.opacity(0.45), lineWidth: 1))
+                            .shadow(color: store.selectedChannel?.id == channel.id ? LanTVDesignSystem.accent.opacity(0.4) : .clear, radius: 6)
                             ZStack(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.02))
                                 ForEach(channel.programmes.filter { $0.stop > origin && $0.start < end }) { programme in
@@ -335,11 +383,12 @@ struct MobileContentView: View {
                                             Text(programme.title).font(.system(size: 13, weight: .semibold, design: .rounded)).lineLimit(2)
                                             Text("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                                         }.padding(.horizontal, min(12, width / 4)).frame(width: width, height: 64, alignment: .leading)
-                                            .background(MobileTheme.accent.opacity(programme.id == channel.nowPlaying?.id ? 0.25 : 0.09), in: RoundedRectangle(cornerRadius: 12))
+                                            .background(programme.id == channel.nowPlaying?.id ? LanTVDesignSystem.liveProgrammeGradient : LanTVDesignSystem.programmeGradient, in: RoundedRectangle(cornerRadius: 10))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(programme.id == channel.nowPlaying?.id ? LanTVDesignSystem.accent.opacity(0.55) : LanTVDesignSystem.panelBorder.opacity(0.4), lineWidth: 1))
                                             .clipped()
                                     }.buttonStyle(.plain).offset(x: CGFloat(cellStart.timeIntervalSince(origin)) * pointsPerSecond)
                                 }
-                                Rectangle().fill(Color.blue).frame(width: 1).offset(x: CGFloat(Date().timeIntervalSince(origin)) * pointsPerSecond)
+                                Rectangle().fill(LanTVDesignSystem.mint).frame(width: 2).shadow(color: LanTVDesignSystem.mint, radius: 5).offset(x: CGFloat(Date().timeIntervalSince(origin)) * pointsPerSecond)
                             }.frame(width: timelineWidth, height: 64)
                         }
                     }
@@ -350,7 +399,14 @@ struct MobileContentView: View {
             .scrollDismissesKeyboard(.interactively)
             .scrollIndicators(.visible)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }.padding(18).background(MobileTheme.panel, in: RoundedRectangle(cornerRadius: 22))
+        }
+        .padding(18)
+        .background {
+            RoundedRectangle(cornerRadius: 22).fill(LanTVDesignSystem.panelGradient)
+                .overlay { LanTVSignalWave(guide: true).clipShape(RoundedRectangle(cornerRadius: 22)) }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65)))
     }
 
 }
@@ -361,8 +417,8 @@ struct MobileChromeStyle: ButtonStyle {
         configuration.label.font(.system(size: 13, weight: .semibold, design: .rounded))
             .padding(.horizontal, 12).padding(.vertical, 10)
             .foregroundStyle(.white)
-            .background(primary ? AnyShapeStyle(MobileTheme.accent) : AnyShapeStyle(Color.white.opacity(0.09)), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.08)))
+            .background(primary ? AnyShapeStyle(MobileTheme.accent) : AnyShapeStyle(LanTVDesignSystem.programmeGradient), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65)))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

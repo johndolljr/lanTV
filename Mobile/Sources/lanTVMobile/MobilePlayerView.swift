@@ -4,13 +4,41 @@ import MobileVLCKit
 
 struct MobilePlayerView: View {
     @Bindable var store: MobileStore
+    var miniPlayer = false
     @State private var isFullscreen = false
     @StateObject private var vlc = MobileVLCController()
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            MobilePlaybackSurface(store: store, vlc: vlc)
-            if store.isPlaying {
+        ZStack(alignment: .topTrailing) {
+            if !isFullscreen {
+                MobilePlaybackSurface(store: store, vlc: vlc)
+            }
+            if store.isPlaying && miniPlayer && !isFullscreen {
+                Button(action: togglePlayback) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(store.isPaused ? "Resume Playback" : "Pause Playback")
+                .accessibilityIdentifier("playback-toggle")
+            }
+            if store.isPlaying && miniPlayer && !isFullscreen {
+                Button { isFullscreen = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.24), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+                .accessibilityLabel("Full Screen Video")
+                .accessibilityIdentifier("fullscreen-video")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if store.isPlaying && !miniPlayer {
                 MobilePlaybackControls(store: store, vlc: vlc, isFullscreen: false) {
                     isFullscreen = true
                 }
@@ -21,7 +49,7 @@ struct MobilePlayerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .accessibilityIdentifier("mobile-player")
         .fullScreenCover(isPresented: $isFullscreen) {
-            MobileFullscreenPlayer(store: store, vlc: vlc)
+            MobileFullscreenPlayer(store: store)
         }
         .onChange(of: store.playbackGeneration) { _, _ in
             guard store.isPlaying, !store.usesNativePlayer, let url = store.selectedChannel?.streamURL else {
@@ -37,6 +65,20 @@ struct MobilePlayerView: View {
         .onChange(of: store.isPlaying) { _, playing in
             if !playing && !store.isPaused { vlc.stop() }
         }
+        .onChange(of: isFullscreen) { _, presented in
+            if presented && !store.usesNativePlayer { vlc.stop() }
+        }
+    }
+
+    private func togglePlayback() {
+        guard store.isPlaying else { return }
+        if store.isPaused {
+            store.isPaused = false
+            if store.usesNativePlayer { store.player.play() } else { vlc.resume() }
+        } else {
+            store.isPaused = true
+            if store.usesNativePlayer { store.player.pause() } else { vlc.pause() }
+        }
     }
 }
 
@@ -49,14 +91,14 @@ private struct MobilePlaybackSurface: View {
             Color.black
             if store.isPlaying, let channel = store.selectedChannel, let url = channel.streamURL {
                 if store.usesNativePlayer {
-                    VideoPlayer(player: store.player)
+                    MobileNativeVideoSurface(player: store.player)
                 } else {
                     let token = store.playbackGeneration
                     VLCMobileSurface(url: url, vlc: vlc, onError: { message in
                         guard store.playbackGeneration == token else { return }
                         store.playerError = message
                         store.stopPlayback()
-                    }).id(token)
+                    }, startsPaused: store.isPaused).id(token)
                 }
             } else {
                 VStack(spacing: 12) {
@@ -69,9 +111,30 @@ private struct MobilePlaybackSurface: View {
     }
 }
 
+private struct MobileNativeVideoSurface: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> UIView {
+        let view = NativePlayerLayerView()
+        view.backgroundColor = .black
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        (view.layer as? AVPlayerLayer)?.player = player
+    }
+}
+
+private final class NativePlayerLayerView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
 private struct MobileFullscreenPlayer: View {
     @Bindable var store: MobileStore
-    @ObservedObject var vlc: MobileVLCController
+    @StateObject private var vlc = MobileVLCController()
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -105,6 +168,7 @@ private struct MobileFullscreenPlayer: View {
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .accessibilityIdentifier("fullscreen-player")
+        .onDisappear { vlc.stop() }
     }
 }
 
@@ -180,10 +244,13 @@ private struct VLCMobileSurface: UIViewRepresentable {
     let url: URL
     let vlc: MobileVLCController
     let onError: @MainActor @Sendable (String) -> Void
+    let startsPaused: Bool
+
     func makeUIView(context: Context) -> UIView {
         let view = UIView(); view.backgroundColor = .black
         vlc.attach(view)
-        vlc.play(url, onError: onError)
+        if startsPaused { vlc.prepare(url, onError: onError) }
+        else { vlc.play(url, onError: onError) }
         return view
     }
     func updateUIView(_ uiView: UIView, context: Context) { vlc.attach(uiView) }
@@ -194,6 +261,7 @@ private final class MobileVLCController: NSObject, ObservableObject {
     private let player = VLCMediaPlayer()
     private let delegate = MobileVLCDelegate()
     private var activeURL: URL?
+    private weak var drawableView: UIView?
 
     override init() {
         super.init()
@@ -201,12 +269,20 @@ private final class MobileVLCController: NSObject, ObservableObject {
         player.delegate = delegate
     }
 
-    func attach(_ view: UIView) { player.drawable = view }
+    func attach(_ view: UIView) {
+        guard drawableView !== view else { return }
+        drawableView = view
+        player.drawable = view
+    }
 
     func play(_ url: URL, onError: @escaping @MainActor @Sendable (String) -> Void) {
+        prepare(url, onError: onError)
+        if !player.isPlaying { player.play() }
+    }
+
+    func prepare(_ url: URL, onError: @escaping @MainActor @Sendable (String) -> Void) {
         delegate.onError = onError
         guard activeURL != url else {
-            if !player.isPlaying { player.play() }
             return
         }
         player.stop()
@@ -214,15 +290,16 @@ private final class MobileVLCController: NSObject, ObservableObject {
         let media = VLCMedia(url: url)
         media.addOption(":network-caching=1000")
         player.media = media
-        player.play()
     }
 
-    func pause() { if player.isPlaying { player.pause() } }
-    func resume() { if !player.isPlaying { player.play() } }
+    func pause() { player.pause() }
+    func resume() { player.play() }
 
     func stop() {
         player.stop()
+        player.drawable = nil
         activeURL = nil
+        drawableView = nil
         delegate.onError = nil
     }
 }

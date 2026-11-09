@@ -11,6 +11,7 @@
 		4D9A08E89D6EE2356AA7BC8F /* MobileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664933A0F78D678513565498 /* MobileStore.swift */; };
 		53C9C549F5FF88270D0E3AA0 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		564993FCEC8D6D587F2915C6 /* MobileCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EACA7C6340AFF48C57DBC36C /* MobileCore.swift */; };
+		599D09D6212422806F93DA99 /* LanTVDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 879D34B0A7C4D1891E22A171 /* LanTVDesignSystem.swift */; };
 		B6160C30F22F9CB1414DFC82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7F7344046D3EA2E201680F8D /* Assets.xcassets */; };
 		E4B43C0EDE88F50B1B748B4D /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */; };
 		E6C4DF506700196A03F7A565 /* TVGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0BE45EEDF4560CBC17F742 /* TVGuideView.swift */; };
@@ -36,6 +37,7 @@
 		527A2054D1846AC14E495341 /* lanTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lanTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		664933A0F78D678513565498 /* MobileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileStore.swift; sourceTree = "<group>"; };
 		7F7344046D3EA2E201680F8D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		879D34B0A7C4D1891E22A171 /* LanTVDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanTVDesignSystem.swift; sourceTree = "<group>"; };
 		BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
 		EACA7C6340AFF48C57DBC36C /* MobileCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -68,6 +70,14 @@
 			path = Mobile;
 			sourceTree = "<group>";
 		};
+		3A21C5F9421638C90361E92C /* lanTV */ = {
+			isa = PBXGroup;
+			children = (
+				879D34B0A7C4D1891E22A171 /* LanTVDesignSystem.swift */,
+			);
+			path = lanTV;
+			sourceTree = "<group>";
+		};
 		5D180A9A3DF27ED7E615548F /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -76,10 +86,19 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
+		66C371600547396326FF2A25 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				3A21C5F9421638C90361E92C /* lanTV */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 		780155E547D26D663E4C9B72 /* lanTV */ = {
 			isa = PBXGroup;
 			children = (
 				386DED65480A780D738AFFCC /* Mobile */,
+				66C371600547396326FF2A25 /* Sources */,
 			);
 			name = lanTV;
 			path = ..;
@@ -202,6 +221,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				599D09D6212422806F93DA99 /* LanTVDesignSystem.swift in Sources */,
 				564993FCEC8D6D587F2915C6 /* MobileCore.swift in Sources */,
 				4D9A08E89D6EE2356AA7BC8F /* MobileStore.swift in Sources */,
 				E6C4DF506700196A03F7A565 /* TVGuideView.swift in Sources */,

@@ -80,9 +80,9 @@ struct SettingsView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.03, green: 0.05, blue: 0.11),
-                    Color(red: 0.05, green: 0.09, blue: 0.16),
-                    Color(red: 0.04, green: 0.07, blue: 0.14)
+                    LanTVDesignSystem.background,
+                    Color(red: 0.035, green: 0.05, blue: 0.09),
+                    Color(red: 0.025, green: 0.035, blue: 0.075)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -960,14 +960,7 @@ private struct SourceEditorCard: View {
     }
 
     private var cardBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.11, blue: 0.18).opacity(0.94),
-                Color(red: 0.05, green: 0.08, blue: 0.14).opacity(0.97)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        LanTVDesignSystem.panelGradient
     }
 
     private var channelSummary: String {
@@ -1215,14 +1208,7 @@ private struct GuidePluginEditorCard: View {
     }
 
     private var cardBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(red: 0.08, green: 0.11, blue: 0.18).opacity(0.94),
-                Color(red: 0.05, green: 0.08, blue: 0.14).opacity(0.97)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        LanTVDesignSystem.panelGradient
     }
 }
 
@@ -1420,8 +1406,8 @@ private struct SettingsActionButtonStyle: ButtonStyle {
         case .primary:
             return AnyShapeStyle(LinearGradient(
                 colors: [
-                    Color(red: 0.13, green: 0.53, blue: 1.0).opacity(isPressed ? 0.82 : 1),
-                    Color(red: 0.42, green: 0.22, blue: 1.0).opacity(isPressed ? 0.72 : 0.92)
+                    LanTVDesignSystem.accent.opacity(isPressed ? 0.8 : 1),
+                    LanTVDesignSystem.violet.opacity(isPressed ? 0.72 : 0.92)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing

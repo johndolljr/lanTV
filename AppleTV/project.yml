@@ -21,6 +21,7 @@ targets:
       - path: Assets.xcassets
       - path: ../Mobile/Sources/lanTVMobile/MobileCore.swift
       - path: ../Mobile/Sources/lanTVMobile/MobileStore.swift
+      - path: ../Sources/lanTV/LanTVDesignSystem.swift
     dependencies:
       - framework: Vendor/TVVLCKit.xcframework
         embed: true

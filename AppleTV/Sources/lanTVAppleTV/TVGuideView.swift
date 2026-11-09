@@ -4,14 +4,16 @@ import TVVLCKit
 import UIKit
 
 private enum TVTheme {
-    static let background = Color(red: 0.018, green: 0.028, blue: 0.055)
-    static let panel = Color(red: 0.055, green: 0.075, blue: 0.12)
-    static let accent = Color(red: 0.18, green: 0.67, blue: 1.0)
-    static let mint = Color(red: 0.29, green: 0.91, blue: 0.73)
-    static let violet = Color(red: 0.48, green: 0.37, blue: 1.0)
+    static let background = LanTVDesignSystem.background
+    static let panel = LanTVDesignSystem.panel
+    static let accent = LanTVDesignSystem.accent
+    static let mint = LanTVDesignSystem.mint
+    static let violet = LanTVDesignSystem.violet
 }
 
 struct TVGuideView: View {
+    private enum HeaderControl: Hashable { case sources, refresh, search, settings }
+
     @Bindable var store: MobileStore
     @State private var fullscreen = false
     @State private var showDetails = false
@@ -23,6 +25,8 @@ struct TVGuideView: View {
     @State private var newStreamTemplate = ""
     @State private var newSourceKind: MobileSource.Kind = .xmltv
     @FocusState private var guideSearchFocused: Bool
+    @FocusState private var focusedHeaderControl: HeaderControl?
+    @FocusState private var focusedChannelID: String?
     @FocusState private var focusedProgrammeID: String?
     @State private var focusedProgramme: MobileProgramme?
     @State private var focusedProgrammeChannel: MobileChannel?
@@ -41,9 +45,9 @@ struct TVGuideView: View {
             let headerVerticalInset: CGFloat = 14
             ZStack(alignment: .topTrailing) {
                 ZStack {
-                    LinearGradient(colors: [Color(red: 0.025, green: 0.045, blue: 0.09), TVTheme.background, Color(red: 0.035, green: 0.025, blue: 0.09)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    RadialGradient(colors: [TVTheme.accent.opacity(0.12), .clear], center: .topTrailing, startRadius: 20, endRadius: 760)
-                    RadialGradient(colors: [TVTheme.violet.opacity(0.10), .clear], center: .bottomLeading, startRadius: 0, endRadius: 680)
+                    LanTVDesignSystem.backgroundGradient
+                    RadialGradient(colors: [TVTheme.accent.opacity(0.15), .clear], center: .topTrailing, startRadius: 20, endRadius: 760)
+                    RadialGradient(colors: [TVTheme.violet.opacity(0.20), .clear], center: .bottomLeading, startRadius: 0, endRadius: 680)
                 }
                 .ignoresSafeArea()
                 guideLayout(
@@ -105,10 +109,21 @@ struct TVGuideView: View {
         }
         .onPlayPauseCommand(perform: togglePlayback)
         .onExitCommand {
-            if guideSearchFocused { guideSearchFocused = false; searchExpanded = false }
+            if guideSearchFocused {
+                guideSearchFocused = false
+                searchExpanded = false
+                focusedHeaderControl = .search
+            }
             else if fullscreen { fullscreen = false }
             else if showSettings { showSettings = false }
             else if showSources { showSources = false }
+            else if focusedProgrammeID != nil, let channelID = focusedProgrammeChannel?.id {
+                focusedProgrammeID = nil
+                focusedChannelID = channelID
+            } else if focusedChannelID != nil {
+                focusedChannelID = nil
+                focusedHeaderControl = .sources
+            }
         }
         .sheet(isPresented: $showSources) { sourceSheet }
         .sheet(isPresented: $showSettings) { settingsSheet }
@@ -192,19 +207,27 @@ struct TVGuideView: View {
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .background(.white.opacity(0.055), in: Capsule())
-                    Button { showSources = true } label: { Label("Sources", systemImage: "server.rack") }.accessibilityIdentifier("tv-sources")
-                    Button { store.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }.accessibilityIdentifier("tv-refresh")
+                    Button { showSources = true } label: { Label("Sources", systemImage: "server.rack") }
+                        .focused($focusedHeaderControl, equals: .sources)
+                        .accessibilityIdentifier("tv-sources")
+                    Button { store.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                        .focused($focusedHeaderControl, equals: .refresh)
+                        .accessibilityIdentifier("tv-refresh")
                     if searchExpanded {
                         HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.8))
                             TextField("Search channels & shows", text: $store.search)
                                 .font(.system(size: 16, weight: .medium, design: .rounded))
                                 .textFieldStyle(.plain)
                                 .focused($guideSearchFocused)
                                 .submitLabel(.search)
-                                .onSubmit { guideSearchFocused = false; searchExpanded = false }
+                                .onSubmit {
+                                    guideSearchFocused = false
+                                    searchExpanded = false
+                                    focusedHeaderControl = .search
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 6)
+                                .background(guideSearchFocused ? TVTheme.accent.opacity(0.34) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                                .animation(.easeInOut(duration: 0.12), value: guideSearchFocused)
                                 .accessibilityIdentifier("tv-guide-search")
                             if !store.search.isEmpty {
                                 Button { store.search = "" } label: {
@@ -216,31 +239,32 @@ struct TVGuideView: View {
                         }
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .frame(width: min(260, max(210, width * 0.14)))
-                        .background(guideSearchFocused ? TVTheme.accent.opacity(0.92) : Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
                         .onAppear { guideSearchFocused = true }
                     } else {
                         Button { searchExpanded = true } label: {
                             Label("Search", systemImage: "magnifyingglass")
                         }
+                        .focused($focusedHeaderControl, equals: .search)
                         .accessibilityIdentifier("tv-guide-search")
                     }
-                    Button { showSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }.accessibilityIdentifier("tv-settings")
+                    Button { showSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+                        .focused($focusedHeaderControl, equals: .settings)
+                        .accessibilityIdentifier("tv-settings")
                 }
                 .font(.system(size: 16, weight: .semibold)).buttonStyle(TVControlButtonStyle())
                 .controlSize(.regular)
                 .padding(.bottom, 14)
 
                 HStack(alignment: .center, spacing: 12) {
-                    Text(currentChannel?.number ?? "LIVE")
-                        .font(.caption.weight(.bold).monospacedDigit()).tracking(1.2).foregroundStyle(TVTheme.mint)
-                        .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(TVTheme.mint.opacity(0.12), in: Capsule())
+                    Circle()
+                        .fill(LinearGradient(colors: [TVTheme.mint.opacity(0.60), TVTheme.accent.opacity(0.26)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 24, height: 24)
                     Text(currentChannel?.name ?? "Your guide, at a glance")
-                        .font(.system(size: 27, weight: .bold, design: .rounded)).lineLimit(1)
+                        .font(.system(size: 33, weight: .bold, design: .rounded)).lineLimit(1)
                 }
                 .padding(.bottom, 6)
                 Text(currentChannel?.nowPlaying?.title ?? (store.channels.isEmpty ? "Find your channels" : "Choose a channel to start watching"))
-                    .font(.system(size: 22, weight: .semibold, design: .rounded)).lineLimit(1)
+                    .font(.system(size: 26, weight: .semibold, design: .rounded)).lineLimit(1)
                 HStack(spacing: 16) {
                     if let programme = currentChannel?.nowPlaying {
                         Label("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))", systemImage: "clock")
@@ -260,8 +284,9 @@ struct TVGuideView: View {
         .padding(.horizontal, 16).padding(.vertical, 14)
         .background {
             RoundedRectangle(cornerRadius: 26)
-                .fill(LinearGradient(colors: [Color(red: 0.09, green: 0.13, blue: 0.21).opacity(0.98), TVTheme.panel.opacity(0.92)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(.white.opacity(0.09), lineWidth: 1))
+                .fill(LanTVDesignSystem.panelGradient)
+                .overlay { LanTVSignalWave().clipShape(RoundedRectangle(cornerRadius: 26)) }
+                .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1))
                 .shadow(color: .black.opacity(0.22), radius: 14, y: 5)
         }
     }
@@ -278,7 +303,7 @@ struct TVGuideView: View {
         return VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("The Guide").font(.system(size: 26, weight: .bold, design: .rounded)).tracking(-0.5)
+                    Text("The Guide").font(.system(size: 32, weight: .bold, design: .rounded)).tracking(-0.5)
                     Text(store.search.isEmpty
                          ? "\(store.channels.count) channels"
                          : "\(store.filteredChannels.count) results from \(store.channels.count) channels")
@@ -345,10 +370,12 @@ struct TVGuideView: View {
                             HStack(spacing: 8) {
                                 Button { store.select(channel) } label: {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(channel.number.isEmpty ? "TV" : channel.number).font(.system(size: 16, weight: .bold, design: .rounded).monospacedDigit()).foregroundStyle(.secondary)
-                                        Text(channel.name).font(.system(size: 20, weight: .semibold, design: .rounded)).lineLimit(1)
+                                        Text(channel.number.isEmpty ? "TV" : channel.number).font(.system(size: 18, weight: .bold, design: .rounded).monospacedDigit()).foregroundStyle(.secondary)
+                                        Text(channel.name).font(.system(size: 24, weight: .semibold, design: .rounded)).lineLimit(1)
                                     }.frame(width: channelColumnWidth - 16, height: 88, alignment: .leading).padding(.horizontal, 8)
-                                }.buttonStyle(TVChannelButtonStyle(selected: currentChannel?.id == channel.id))
+                                }
+                                .focused($focusedChannelID, equals: channel.id)
+                                .buttonStyle(TVChannelButtonStyle(selected: currentChannel?.id == channel.id))
                                 ZStack(alignment: .leading) {
                                     RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.18))
                                     ForEach(channel.programmes.filter { $0.stop > origin && $0.start < end }) { programme in
@@ -365,12 +392,12 @@ struct TVGuideView: View {
                             Group {
                                 if cellWidth >= 165 {
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(programme.title).font(.system(size: 18, weight: .semibold, design: .rounded)).lineLimit(1)
+                                        Text(programme.title).font(.system(size: 22, weight: .semibold, design: .rounded)).lineLimit(1)
                                         Text("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))")
-                                            .font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+                                            .font(.system(size: 17, weight: .medium)).foregroundStyle(.white.opacity(0.80)).lineLimit(1)
                                     }
                                 } else if cellWidth >= 62 {
-                                    Text(programme.title).font(.system(size: 16, weight: .semibold, design: .rounded)).lineLimit(1)
+                                    Text(programme.title).font(.system(size: 20, weight: .semibold, design: .rounded)).lineLimit(1)
                                 } else {
                                     HStack(spacing: 0) {
                                         Capsule().fill(isNowPlaying ? TVTheme.mint : TVTheme.accent.opacity(0.60)).frame(width: isNowPlaying ? 5 : 3)
@@ -383,10 +410,10 @@ struct TVGuideView: View {
                             .background {
                                 RoundedRectangle(cornerRadius: 11)
                                     .fill(isNowPlaying
-                                          ? LinearGradient(colors: [TVTheme.accent.opacity(0.36), TVTheme.violet.opacity(0.22)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                          : LinearGradient(colors: [.white.opacity(0.055), .white.opacity(0.025)], startPoint: .top, endPoint: .bottom))
+                                          ? LanTVDesignSystem.liveProgrammeGradient
+                                          : LanTVDesignSystem.programmeGradient)
                             }
-                            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(isNowPlaying ? .white.opacity(0.15) : .white.opacity(0.045), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(isNowPlaying ? TVTheme.accent.opacity(0.58) : LanTVDesignSystem.panelBorder.opacity(0.42), lineWidth: 1))
                             .contentShape(Rectangle())
                             .clipped()
                         }
@@ -414,8 +441,9 @@ struct TVGuideView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: 26)
-                .fill(LinearGradient(colors: [Color(red: 0.065, green: 0.085, blue: 0.14).opacity(0.98), Color(red: 0.035, green: 0.05, blue: 0.09).opacity(0.97)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(.white.opacity(0.075), lineWidth: 1))
+                .fill(LanTVDesignSystem.panelGradient)
+                .overlay { LanTVSignalWave(guide: true).clipShape(RoundedRectangle(cornerRadius: 26)) }
+                .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(LanTVDesignSystem.panelBorder.opacity(0.65), lineWidth: 1))
                 .shadow(color: .black.opacity(0.20), radius: 14, y: 5)
         }
     }
@@ -579,11 +607,11 @@ private struct TVChannelButtonStyle: ButtonStyle {
             .background {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(selected
-                          ? LinearGradient(colors: [TVTheme.accent.opacity(0.28), TVTheme.violet.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                          : LinearGradient(colors: [.white.opacity(0.055), .white.opacity(0.025)], startPoint: .top, endPoint: .bottom))
+                          ? LanTVDesignSystem.liveProgrammeGradient
+                          : LanTVDesignSystem.programmeGradient)
             }
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isFocused ? .white.opacity(0.9) : (selected ? TVTheme.accent.opacity(0.86) : .white.opacity(0.055)), lineWidth: isFocused ? 3 : (selected ? 2 : 1)))
-            .shadow(color: isFocused ? TVTheme.accent.opacity(0.32) : .clear, radius: 16, y: 4)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(isFocused ? TVTheme.accent : (selected ? TVTheme.accent.opacity(0.86) : LanTVDesignSystem.panelBorder.opacity(0.42)), lineWidth: isFocused ? 3 : (selected ? 2 : 1)))
+            .shadow(color: (isFocused || selected) ? TVTheme.accent.opacity(0.55) : .clear, radius: 12, y: 0)
             .scaleEffect(configuration.isPressed ? 0.99 : 1)
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
             .animation(.easeOut(duration: 0.16), value: isFocused)
@@ -608,12 +636,12 @@ private struct TVControlButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
+            .font(.system(size: 19, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(isFocused ? TVTheme.accent.opacity(0.92) : Color.white.opacity(configuration.isPressed ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isFocused ? .white : .white.opacity(0.22), lineWidth: isFocused ? 2 : 1))
-            .shadow(color: isFocused ? TVTheme.accent.opacity(0.28) : .clear, radius: 9, y: 3)
+            .background { RoundedRectangle(cornerRadius: 12).fill(isFocused ? LanTVDesignSystem.accentGradient : LanTVDesignSystem.programmeGradient) }
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(isFocused ? Color.white : LanTVDesignSystem.panelBorder.opacity(0.72), lineWidth: isFocused ? 2 : 1))
+            .shadow(color: isFocused ? TVTheme.accent.opacity(0.65) : .clear, radius: 15, y: 0)
             .animation(.easeOut(duration: 0.12), value: isFocused)
             .animation(.easeOut(duration: 0.10), value: configuration.isPressed)
     }

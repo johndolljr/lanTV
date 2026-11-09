@@ -1,10 +1,25 @@
 # lanTV
 
-lanTV is a native macOS application designed for streaming live television, navigating Electronic Programme Guides (EPG), and aggregating SiliconDust HDHomeRun tuners and XMLTV feeds across your local area network.
+lanTV is a native TV guide and streaming app for macOS, iPhone, iPad, and Apple TV. It brings XMLTV and HDHomeRun lineups together, and lets each device play streams directly from their source.
 
-Built with SwiftUI, AVKit, and VLCKit, lanTV combines an interactive TV grid, flexible live stream playback (HLS and MPEG-TS), detachable picture-in-picture windowing, Touch ID channel protection, and an integrated local IPTV server.
+The Mac app can also serve a unified guide and per-channel stream URLs to your mobile and TV apps over your local network. Channel locks stay synchronized with the desktop.
 
-![lanTV Main Window](docs/assets/screenshot.png)
+![Wide-screen lanTV guide preview for the Mac, landscape iPad, and Apple TV](docs/assets/screenshot.png)
+
+## Supported Devices
+
+| Device | Experience |
+| --- | --- |
+| **Mac** | Full guide and source management, channel protection, recordings, and the local guide server. |
+| **iPhone** | Search and browse channels, stream directly from sources, and keep a cached guide available when the Mac is offline. |
+| **iPad** | A wide-screen guide close to the Apple TV layout in landscape, with a more compact guide and player layout in portrait. |
+| **Apple TV** | Remote-first guide browsing, selected-channel preview, and quick full-screen playback with programme information and playback controls. |
+
+The wide-screen image above is a visual preview of the shared Mac, iPad landscape, and Apple TV guide design. The mobile screenshots below use the app's privacy-safe demo guide.
+
+![lanTV running on iPhone](docs/assets/screenshot-iphone.jpg)
+
+![lanTV running on iPad in portrait](docs/assets/screenshot-ipad-portrait.jpg)
 
 ---
 
