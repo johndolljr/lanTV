@@ -30,16 +30,12 @@
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
-        <key>NSAllowsArbitraryLoadsForMedia</key>
-        <true/>
-        <key>NSAllowsLocalNetworking</key>
-        <true/>
-        <key>NSExceptionDomains</key>
-        <dict/>
     </dict>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSLocalNetworkUsageDescription</key>
     <string>lanTV needs local network access to load XMLTV guides and play LAN video streams.</string>
+    <key>NSBonjourServices</key>
+    <array><string>_lantv._tcp</string></array>
 </dict>
 </plist>

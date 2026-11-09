@@ -83,14 +83,10 @@ Or run directly from the terminal:
 
 ## App Transport Security (ATS) & Local Networks
 
-Apple's App Transport Security (ATS) restricts plain HTTP loads for custom top-level domains (such as `.lan`, `.home`, or `.internal`) unless explicitly listed in `NSExceptionDomains`.
-
-To keep the open-source repository completely clean and free of hardcoded personal hostnames, the build script (`scripts/build-app.sh`) handles ATS dynamically at build time:
-1. **Automatic Detection**: Reads hostnames from your local `settings.json` if configured.
-2. **Local Config**: Reads domains from a local `.local-domains` file (ignored by Git).
-3. **Environment Override**: Reads `ATS_DOMAINS="host1.lan host2.lan"`.
-
-The build script automatically injects these exception domains directly into the built app bundle's `Info.plist` and re-signs the application locally, ensuring smooth network streaming on your home network without committing private hostnames.
+lanTV accepts user-configured HTTP guide and stream URLs, including arbitrary
+`.lan`, `.home`, and `.internal` hostnames. Both apps use an ATS exception for
+those arbitrary sources. No per-host build-time list is needed. Local-network
+permission, working DNS, and a reachable upstream server are still required.
 
 ---
 
@@ -106,13 +102,74 @@ All settings are managed graphically within the application. Open **Settings** (
 3. Click **Save Changes** and click **Refresh** on the top bar.
 
 ### Managing Channels
-- **Hide Channels**: Uncheck any channel you do not watch. Hidden channels are excluded from both the guide grid and the exported M3U playlist.
+- **Hide Channels**: Expand **Channel Rules** for a source (collapsed by default), then check **Hidden** for any channel you do not watch. Hidden channels are excluded from both the guide grid and the exported M3U playlist.
 - **Lock Channels**: Click the lock icon on sensitive channels. When locked, their names and listings are obscured until you click **Unlock** and authenticate with Touch ID.
 
 ### Local API Server
 lanTV hosts a local HTTP server (default port `48921`, configurable in Settings). You can use this URL on other devices in your home:
 - M3U Playlist: `http://<your-mac-ip>:48921/api/playlist.m3u`
 - XMLTV Guide: `http://<your-mac-ip>:48921/api/guide.xmltv`
+
+### iPhone and iPad
+
+Open `Mobile/lanTVMobile.xcodeproj` in Xcode and choose the **lanTVMobile**
+scheme. It targets both iPhone and iPad. For a simulator build or an unsigned
+device compilation check:
+
+```sh
+./scripts/mobile-build.sh debug simulator
+./scripts/mobile-build.sh debug device
+./scripts/mobile-test.sh
+./scripts/test-desktop-api.sh
+```
+
+The build script fetches the official VideoLAN MobileVLCKit framework into an
+ignored vendor directory. Installing on a physical device requires your normal
+Xcode signing setup; these commands do not configure signing or publish the app.
+
+On the same local network, the mobile app discovers the Mac over Bonjour and
+asks before adding it as a guide source. Its combined guide includes every
+exported channel from XMLTV and HDHomeRun feeds, with the direct upstream stream
+URL on each channel. Video plays from the original source on the mobile device,
+using the stream format provided for that channel. Keep the Mac running for
+guide updates and shared channel-lock state. You can also configure independent
+XMLTV feeds with a stream URL template.
+
+Use a hostname or IP address that all devices can reach in the desktop source's
+guide URL and stream URL template. `localhost` and `127.0.0.1` refer to the device
+running the app, so they cannot identify your Mac or upstream TV server from an
+iPhone or iPad. Arbitrary HTTP `.lan` sources are supported without adding each
+hostname to the application bundle. Allow local-network access when requested.
+
+Protected channels follow the Mac's lock state. Requesting an unlock on mobile
+only sends a request: someone must approve and authenticate on the Mac. Relocking
+on the Mac removes protected content on the next mobile state check. Mobile
+caches the desktop guide and direct stream URLs for unprotected channels, so they
+remain available through a temporary desktop outage. Protected channels and
+their stream URLs are never cached; protected playback stops when desktop state
+can no longer be verified. Independent XMLTV feeds do not inherit the Mac's
+channel rules.
+
+The local API and mobile lock are designed for a trusted LAN. Because streams go
+directly to their original servers, lanTV cannot revoke an address already copied
+to another player. See [architecture](docs/ARCHITECTURE.md) and the
+[manual test plan](docs/MANUAL_TEST_PLAN.md) for the protocol and verification.
+
+### Apple TV
+
+The Apple TV app is in `AppleTV/lanTVAppleTV.xcodeproj` (scheme
+`lanTVAppleTV`). Build a tvOS simulator app with `scripts/appletv-build.sh
+simulator`; use `scripts/appletv-build.sh device` for an unsigned tvOS device
+build. Xcode signing is still needed to install it on a physical Apple TV.
+The build script fetches the pinned official TVVLCKit binary for formats that
+AVPlayer does not handle.
+
+The guide keeps a live channel preview beside the channel list. Select a row to
+switch channels, use the Play/Pause remote button or the on-screen controls,
+and open Full Screen for viewing. While full screen, swipe up for programme
+information and down to dismiss it; Menu exits the info overlay or fullscreen.
+The Sources and Settings screens support Bonjour desktop discovery, saved guide
+sources, refresh, direct XMLTV source setup, and desktop-approved channel unlocks.
 
 ---
 

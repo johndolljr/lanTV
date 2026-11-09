@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import AVKit
 import Foundation
@@ -44,6 +45,13 @@ final class GuideViewModel {
     var playingRecording: RecordingItem?
     var isGuideWindowVisible = false
     var areAdultChannelsUnlocked = false
+    var pendingMobileUnlockRequests: [MobileUnlockRequest] = []
+    var isApprovingMobileUnlock = false
+    var pendingMobileApproverRequests: [MobileApproverRequest] = []
+    var isApprovingMobileApprover = false
+    var lastMobileApproverName: String?
+    private var adultLockGeneration: UInt64 = 0
+    private var autoRelockTask: Task<Void, Never>?
     var vlcPlaybackGeneration = 0
     var activeStreamURL: URL?
     var audioDelayMs: Int = 0
@@ -132,6 +140,18 @@ final class GuideViewModel {
         sharedAVPlayerView.controlsStyle = .none
         sharedAVPlayerView.videoGravity = .resizeAspect
         sharedAVPlayerView.player = player
+        localAPIServer.onUnlockRequest = { [weak self] request in
+            self?.receiveMobileUnlockRequest(request)
+        }
+        localAPIServer.onApproverRequest = { [weak self] request in
+            self?.receiveMobileApproverRequest(request)
+        }
+        localAPIServer.onApproverUnlockDecision = { [weak self] decision in
+            self?.receiveMobileUnlockDecision(decision)
+        }
+        localAPIServer.onApproverLock = { [weak self] _ in
+            self?.lockAdultChannels()
+        }
         localAPIServer.updatePort(settingsStore.settings.localAPIPort)
         localAPIServer.start()
         loadCachedGuide()
@@ -262,7 +282,11 @@ final class GuideViewModel {
     }
 
     func applySettings(_ mutate: (inout AppSettings) -> Void) {
+        let previousAutoRelockInterval = settingsStore.settings.autoRelockIntervalSeconds
         settingsStore.update(mutate)
+        if previousAutoRelockInterval != settingsStore.settings.autoRelockIntervalSeconds {
+            scheduleAutoRelock()
+        }
         localAPIServer.updatePort(settingsStore.settings.localAPIPort)
         volume = settingsStore.settings.volume
         applyChannelFilters()
@@ -350,6 +374,7 @@ final class GuideViewModel {
     }
 
     func selectChannel(_ channel: GuideChannel) {
+        guard unlockedChannels.contains(where: { $0.id == channel.id }) else { return }
         if selectedChannelID != channel.id {
             activeStreamURL = nil
             resetAudioDelay()
@@ -385,7 +410,11 @@ final class GuideViewModel {
     }
 
     func resumePlayback() {
-        guard let selectedChannel else { return }
+        guard let selectedChannel,
+              unlockedChannels.contains(where: { $0.id == selectedChannel.id }) else {
+            stopPlayback()
+            return
+        }
         if usesVLCPlayback(for: selectedChannel) {
             isPlaying = true
             sharedVLCView.resume()
@@ -484,12 +513,21 @@ final class GuideViewModel {
     }
 
     func lockAdultChannels() {
+        autoRelockTask?.cancel()
+        autoRelockTask = nil
+        adultLockGeneration &+= 1
         areAdultChannelsUnlocked = false
+        if let selectedChannel,
+           !unlockedChannels.contains(where: { $0.id == selectedChannel.id }) {
+            selectedChannelID = nil
+            stopPlayback()
+        }
         applyChannelFilters()
         publishLocalAPIState()
     }
 
     func unlockAdultChannels() async {
+        let lockGeneration = adultLockGeneration
         let context = LAContext()
         context.localizedCancelTitle = "Cancel"
 
@@ -504,10 +542,118 @@ final class GuideViewModel {
             localizedReason: "Unlock protected channels in lanTV"
         )) ?? false
 
-        guard success else { return }
+        guard success, lockGeneration == adultLockGeneration else { return }
         areAdultChannelsUnlocked = true
+        pendingMobileUnlockRequests = []
+        scheduleAutoRelock()
         applyChannelFilters()
         publishLocalAPIState()
+    }
+
+    private func scheduleAutoRelock() {
+        autoRelockTask?.cancel()
+        autoRelockTask = nil
+        guard areAdultChannelsUnlocked else { return }
+        let interval = settingsStore.settings.autoRelockIntervalSeconds
+        guard interval > 0 else { return }
+
+        autoRelockTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(interval))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self, self.areAdultChannelsUnlocked else { return }
+            self.autoRelockTask = nil
+            self.lockAdultChannels()
+        }
+    }
+
+    private func receiveMobileUnlockRequest(_ request: MobileUnlockRequest) {
+        pendingMobileUnlockRequests.removeAll { Date().timeIntervalSince($0.createdAt) >= 300 }
+        guard !areAdultChannelsUnlocked, pendingMobileUnlockRequests.count < 10,
+              !pendingMobileUnlockRequests.contains(where: { $0.id == request.id }) else { return }
+        pendingMobileUnlockRequests.append(request)
+        NSApp.requestUserAttention(.informationalRequest)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(300))
+            self?.pendingMobileUnlockRequests.removeAll { $0.id == request.id && $0.createdAt == request.createdAt }
+        }
+    }
+
+    func denyMobileUnlockRequest(_ id: UUID) {
+        pendingMobileUnlockRequests.removeAll { $0.id == id }
+        localAPIServer.completeUnlockRequest(id)
+    }
+
+    func approveMobileUnlockRequest(_ id: UUID) {
+        guard !isApprovingMobileUnlock,
+              pendingMobileUnlockRequests.contains(where: { $0.id == id && Date().timeIntervalSince($0.createdAt) < 300 }) else { return }
+        isApprovingMobileUnlock = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isApprovingMobileUnlock = false }
+            await self.unlockAdultChannels()
+        }
+    }
+
+    private func receiveMobileApproverRequest(_ request: MobileApproverRequest) {
+        pendingMobileApproverRequests.removeAll { Date().timeIntervalSince($0.createdAt) >= 300 }
+        guard pendingMobileApproverRequests.count < 10,
+              !pendingMobileApproverRequests.contains(where: { $0.id == request.id && $0.credentialHash == request.credentialHash }) else { return }
+        pendingMobileApproverRequests.removeAll { $0.id == request.id }
+        pendingMobileApproverRequests.append(request)
+        NSApp.requestUserAttention(.informationalRequest)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(300))
+            self?.pendingMobileApproverRequests.removeAll { $0.id == request.id && $0.credentialHash == request.credentialHash }
+            self?.localAPIServer.denyApproverRequest(request.id)
+        }
+    }
+
+    func denyMobileApproverRequest(_ deviceID: UUID) {
+        pendingMobileApproverRequests.removeAll { $0.id == deviceID }
+        localAPIServer.denyApproverRequest(deviceID)
+    }
+
+    func approveMobileApproverRequest(_ deviceID: UUID) {
+        guard !isApprovingMobileApprover,
+              let request = pendingMobileApproverRequests.first(where: { $0.id == deviceID && Date().timeIntervalSince($0.createdAt) < 300 }) else { return }
+        isApprovingMobileApprover = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isApprovingMobileApprover = false }
+            let context = LAContext()
+            context.localizedCancelTitle = "Cancel"
+            var error: NSError?
+            guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error),
+                  (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Allow \(request.deviceName) to approve lanTV channel unlock requests")) == true,
+                  self.pendingMobileApproverRequests.contains(where: { $0.id == request.id && $0.credentialHash == request.credentialHash }) else { return }
+
+            let approver = MobileApprover(deviceID: request.id, deviceName: request.deviceName, credentialHash: request.credentialHash, grantedAt: Date())
+            self.settingsStore.update { settings in
+                settings.mobileApprovers.removeAll { $0.deviceID == request.id }
+                settings.mobileApprovers.append(approver)
+            }
+            self.pendingMobileApproverRequests.removeAll { $0.id == request.id }
+            self.publishLocalAPIState()
+        }
+    }
+
+    func revokeMobileApprover(_ deviceID: UUID) {
+        settingsStore.update { $0.mobileApprovers.removeAll { $0.deviceID == deviceID } }
+        publishLocalAPIState()
+    }
+
+    private func receiveMobileUnlockDecision(_ decision: MobileUnlockDecision) {
+        pendingMobileUnlockRequests.removeAll { $0.id == decision.requestID }
+        guard decision.approved, !areAdultChannelsUnlocked else { return }
+        adultLockGeneration &+= 1
+        lastMobileApproverName = decision.approverName
+        areAdultChannelsUnlocked = true
+        pendingMobileUnlockRequests = []
+        scheduleAutoRelock()
+        applyChannelFilters()
     }
 
     func undockPlayer() {
@@ -767,6 +913,11 @@ final class GuideViewModel {
 
     private func playSelectedChannel() {
         guard let selectedChannel else { return }
+        guard unlockedChannels.contains(where: { $0.id == selectedChannel.id }) else {
+            selectedChannelID = nil
+            stopPlayback()
+            return
+        }
         playingRecording = nil
         self.activeStreamURL = selectedChannel.streamURL
 

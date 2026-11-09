@@ -25,3 +25,12 @@ Vendor/VLCKit.xcframework
 
 # Local Agent Rules
 AGENTS.md
+
+# Mobile VLC binary dependency (fetched by mobile-setup-dependencies.sh)
+Mobile/Vendor/
+AppleTV/Vendor/
+
+# Xcode and SwiftPM user-specific workspaces
+.swiftpm/
+**/xcuserdata/
+._*

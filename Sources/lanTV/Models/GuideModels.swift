@@ -333,6 +333,8 @@ struct AppSettings: Codable, Equatable {
     var guidePlugins: [GuidePlugin]
     var excludedChannelIDsBySource: [String: [String]]
     var adultChannelIDsBySource: [String: [String]]
+    /// Seconds a protected-channel unlock remains active; zero disables auto-relock.
+    var autoRelockIntervalSeconds: Double
     var autoRefreshIntervalSeconds: Double
     var guideVisibleHours: Int
     var volume: Double
@@ -343,6 +345,7 @@ struct AppSettings: Codable, Equatable {
     var maxSimultaneousRecordings: Int
     var autoRecordNextShowOnSameChannel: Bool
     var recordingStartLeadMinutes: Int
+    var mobileApprovers: [MobileApprover]
 
     var recordingsDirectoryURL: URL {
         let expanded = (recordingsDirectoryPath as NSString).expandingTildeInPath
@@ -361,6 +364,7 @@ struct AppSettings: Codable, Equatable {
         case guidePlugins
         case excludedChannelIDsBySource
         case adultChannelIDsBySource
+        case autoRelockIntervalSeconds
         case autoRefreshIntervalSeconds
         case guideVisibleHours
         case volume
@@ -371,6 +375,7 @@ struct AppSettings: Codable, Equatable {
         case maxSimultaneousRecordings
         case autoRecordNextShowOnSameChannel
         case recordingStartLeadMinutes
+        case mobileApprovers
     }
 
     init(
@@ -378,6 +383,7 @@ struct AppSettings: Codable, Equatable {
         guidePlugins: [GuidePlugin] = [],
         excludedChannelIDsBySource: [String: [String]] = [:],
         adultChannelIDsBySource: [String: [String]] = [:],
+        autoRelockIntervalSeconds: Double = 14_400,
         autoRefreshIntervalSeconds: Double,
         guideVisibleHours: Int,
         volume: Double,
@@ -387,12 +393,14 @@ struct AppSettings: Codable, Equatable {
         recordingsDirectoryPath: String = AppSettings.defaultRecordingsPath,
         maxSimultaneousRecordings: Int = 1,
         autoRecordNextShowOnSameChannel: Bool = true,
-        recordingStartLeadMinutes: Int = 0
+        recordingStartLeadMinutes: Int = 0,
+        mobileApprovers: [MobileApprover] = []
     ) {
         self.sources = sources
         self.guidePlugins = guidePlugins
         self.excludedChannelIDsBySource = excludedChannelIDsBySource
         self.adultChannelIDsBySource = adultChannelIDsBySource
+        self.autoRelockIntervalSeconds = max(0, min(86_400, autoRelockIntervalSeconds))
         self.autoRefreshIntervalSeconds = autoRefreshIntervalSeconds
         self.guideVisibleHours = guideVisibleHours
         self.volume = volume
@@ -403,6 +411,7 @@ struct AppSettings: Codable, Equatable {
         self.maxSimultaneousRecordings = maxSimultaneousRecordings
         self.autoRecordNextShowOnSameChannel = autoRecordNextShowOnSameChannel
         self.recordingStartLeadMinutes = recordingStartLeadMinutes
+        self.mobileApprovers = mobileApprovers
     }
 
     init(from decoder: Decoder) throws {
@@ -411,6 +420,7 @@ struct AppSettings: Codable, Equatable {
         guidePlugins = try container.decodeIfPresent([GuidePlugin].self, forKey: .guidePlugins) ?? []
         excludedChannelIDsBySource = try container.decodeIfPresent([String: [String]].self, forKey: .excludedChannelIDsBySource) ?? [:]
         adultChannelIDsBySource = try container.decodeIfPresent([String: [String]].self, forKey: .adultChannelIDsBySource) ?? [:]
+        autoRelockIntervalSeconds = max(0, min(86_400, try container.decodeIfPresent(Double.self, forKey: .autoRelockIntervalSeconds) ?? 14_400))
         autoRefreshIntervalSeconds = try container.decodeIfPresent(Double.self, forKey: .autoRefreshIntervalSeconds) ?? 300
         guideVisibleHours = try container.decodeIfPresent(Int.self, forKey: .guideVisibleHours) ?? 6
         volume = try container.decodeIfPresent(Double.self, forKey: .volume) ?? 0.8
@@ -421,6 +431,7 @@ struct AppSettings: Codable, Equatable {
         maxSimultaneousRecordings = try container.decodeIfPresent(Int.self, forKey: .maxSimultaneousRecordings) ?? 1
         autoRecordNextShowOnSameChannel = try container.decodeIfPresent(Bool.self, forKey: .autoRecordNextShowOnSameChannel) ?? true
         recordingStartLeadMinutes = try container.decodeIfPresent(Int.self, forKey: .recordingStartLeadMinutes) ?? 0
+        mobileApprovers = try container.decodeIfPresent([MobileApprover].self, forKey: .mobileApprovers) ?? []
     }
 
     static let `default` = AppSettings(
@@ -436,4 +447,12 @@ struct AppSettings: Codable, Equatable {
         maxSimultaneousRecordings: 1,
         autoRecordNextShowOnSameChannel: true
     )
+}
+
+struct MobileApprover: Codable, Equatable, Identifiable {
+    let deviceID: UUID
+    var id: UUID { deviceID }
+    var deviceName: String
+    let credentialHash: String
+    let grantedAt: Date
 }

@@ -1,0 +1,43 @@
+name: lanTVAppleTV
+options:
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    PRODUCT_BUNDLE_IDENTIFIER: com.ragingcoders.lanTV.appletv
+    TARGETED_DEVICE_FAMILY: "3"
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: Info.plist
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_PREVIEWS: YES
+targets:
+  lanTVAppleTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Sources/lanTVAppleTV
+      - path: Assets.xcassets
+      - path: ../Mobile/Sources/lanTVMobile/MobileCore.swift
+      - path: ../Mobile/Sources/lanTVMobile/MobileStore.swift
+    dependencies:
+      - framework: Vendor/TVVLCKit.xcframework
+        embed: true
+    resources:
+      - path: Vendor/COPYING.txt
+    settings:
+      base:
+        PRODUCT_NAME: lanTV
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TVOS_DEPLOYMENT_TARGET: "17.0"
+        SUPPORTED_PLATFORMS: "appletvos appletvsimulator"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        SWIFT_STRICT_CONCURRENCY: complete
+schemes:
+  lanTVAppleTV:
+    build:
+      targets:
+        lanTVAppleTV: all
+    run:
+      config: Debug

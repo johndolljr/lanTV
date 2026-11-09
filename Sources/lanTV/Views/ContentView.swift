@@ -29,6 +29,14 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 topBar
 
+                if !viewModel.pendingMobileUnlockRequests.isEmpty {
+                    mobileUnlockRequests
+                }
+
+                if !viewModel.pendingMobileApproverRequests.isEmpty {
+                    mobileApproverRequests
+                }
+
                 if viewModel.isGuideWindowVisible, !viewModel.isPlayerDetached, let channel = viewModel.selectedChannel {
                     selectedChannelPanel(channel: channel)
                 }
@@ -50,6 +58,64 @@ struct ContentView: View {
         .onDisappear {
             viewModel.guideWindowDidDisappear()
         }
+    }
+
+    private var mobileUnlockRequests: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(viewModel.pendingMobileUnlockRequests) { request in
+                HStack(spacing: 12) {
+                    Image(systemName: "iphone.and.arrow.forward")
+                        .foregroundStyle(.blue)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Unlock requested by \(request.deviceName)")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Text("Approve here to unlock protected channels on this Mac and connected mobile devices.")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Deny") { viewModel.denyMobileUnlockRequest(request.id) }
+                        .buttonStyle(ChromeButtonStyle(kind: .secondary))
+                    Button(viewModel.isApprovingMobileUnlock ? "Authenticating…" : "Approve Unlock") {
+                        viewModel.approveMobileUnlockRequest(request.id)
+                    }
+                    .buttonStyle(ChromeButtonStyle(kind: .primary))
+                }
+                .disabled(viewModel.isApprovingMobileUnlock)
+            }
+        }
+        .padding(16)
+        .background(panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(Color.blue.opacity(0.3)) }
+    }
+
+    private var mobileApproverRequests: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(viewModel.pendingMobileApproverRequests) { request in
+                HStack(spacing: 12) {
+                    Image(systemName: "person.badge.key.fill").foregroundStyle(.purple)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Approver access requested by \(request.deviceName)")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Text("Allow this device to approve future protected-channel unlock requests. You can revoke it in Settings → Approvers.")
+                            .font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Deny") { viewModel.denyMobileApproverRequest(request.id) }
+                        .buttonStyle(ChromeButtonStyle(kind: .secondary))
+                    Button(viewModel.isApprovingMobileApprover ? "Authorizing…" : "Authorize Device") {
+                        viewModel.approveMobileApproverRequest(request.id)
+                    }
+                    .buttonStyle(ChromeButtonStyle(kind: .primary))
+                }
+                .disabled(viewModel.isApprovingMobileApprover)
+            }
+        }
+        .padding(16)
+        .background(panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(Color.purple.opacity(0.3)) }
     }
 
     private var topBar: some View {

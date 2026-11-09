@@ -4,6 +4,7 @@ struct SettingsView: View {
     private enum SettingsTab: String, CaseIterable, Identifiable {
         case sources = "Sources"
         case plugins = "Plugins"
+        case approvers = "Approvers"
         case behavior = "Behavior"
         case recordings = "Recordings"
 
@@ -15,6 +16,8 @@ struct SettingsView: View {
                 return "square.stack.3d.up"
             case .plugins:
                 return "puzzlepiece.extension"
+            case .approvers:
+                return "person.badge.key.fill"
             case .behavior:
                 return "slider.horizontal.3"
             case .recordings:
@@ -183,6 +186,8 @@ struct SettingsView: View {
             sourcesTab
         case .plugins:
             pluginsTab
+        case .approvers:
+            approversTab
         case .behavior:
             behaviorTab
         case .recordings:
@@ -248,8 +253,47 @@ struct SettingsView: View {
         }
     }
 
+    private var approversTab: some View {
+        SectionCard(
+            title: "Mobile Unlock Approvers",
+            subtitle: "These devices can approve protected-channel unlock requests while connected to this desktop. Each device must be approved here first."
+        ) {
+            VStack(alignment: .leading, spacing: 14) {
+                if draft.mobileApprovers.isEmpty {
+                    Text("No mobile devices can approve unlock requests yet. Ask for approval from the lanTV app on an iPhone, iPad, or Apple TV, then approve the request here.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 10)
+                } else {
+                    ForEach(draft.mobileApprovers) { approver in
+                        HStack(spacing: 14) {
+                            Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.blue)
+                                .frame(width: 34)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(approver.deviceName).font(.system(size: 14, weight: .semibold, design: .rounded))
+                                Text("Approved \(approver.grantedAt.formatted(date: .abbreviated, time: .shortened))")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Revoke") { draft.mobileApprovers.removeAll { $0.deviceID == approver.deviceID } }
+                                .buttonStyle(SettingsActionButtonStyle(kind: .danger))
+                        }
+                        .padding(14)
+                        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.07)))
+                    }
+                }
+                Divider().overlay(Color.white.opacity(0.08))
+                Text("The desktop stores a random credential hash for each approver. Revoke a device here to immediately stop it from receiving or approving future requests.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private var behaviorTab: some View {
-        SectionCard(title: "Guide Behavior", subtitle: "Tune refresh timing, visible guide span, playback defaults, and the LAN API service.") {
+        SectionCard(title: "Guide Behavior", subtitle: "Tune refresh timing, channel protection, playback defaults, and the LAN API service.") {
             VStack(spacing: 16) {
                 LabeledControlRow(
                     title: "Auto refresh",
@@ -276,6 +320,36 @@ struct SettingsView: View {
                             .monospacedDigit()
                     }
                     .frame(width: 160, alignment: .trailing)
+                }
+
+                Divider().overlay(Color.white.opacity(0.08))
+
+                LabeledControlRow(
+                    title: "Protected channel auto-relock",
+                    subtitle: "Automatically re-lock this desktop and connected devices after the selected time. Turn it off to keep channels unlocked until you lock them manually."
+                ) {
+                    VStack(alignment: .trailing, spacing: 10) {
+                        Toggle("Enabled", isOn: Binding(
+                            get: { draft.autoRelockIntervalSeconds > 0 },
+                            set: { enabled in
+                                draft.autoRelockIntervalSeconds = enabled
+                                    ? (draft.autoRelockIntervalSeconds > 0 ? draft.autoRelockIntervalSeconds : 14_400)
+                                    : 0
+                            }
+                        ))
+                        .labelsHidden()
+
+                        Stepper(value: Binding(
+                            get: { max(1, Int((draft.autoRelockIntervalSeconds / 3_600).rounded())) },
+                            set: { draft.autoRelockIntervalSeconds = Double($0 * 3_600) }
+                        ), in: 1...24) {
+                            Text("\(max(1, Int((draft.autoRelockIntervalSeconds / 3_600).rounded()))) hours")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                        }
+                        .disabled(draft.autoRelockIntervalSeconds == 0)
+                    }
+                    .frame(width: 210, alignment: .trailing)
                 }
 
                 Divider().overlay(Color.white.opacity(0.08))
@@ -445,8 +519,8 @@ struct SettingsView: View {
                 let newSource = GuideSource(
                     id: "XMLTV \(nextIndex)",
                     kind: .xmltv(
-                        url: URL(string: "http://localhost:8000/xmltv.xml")!,
-                        streamURLTemplate: "http://localhost:8000/video?channel={channel}"
+                        url: URL(string: "http://example.lan:8000/xmltv.xml")!,
+                        streamURLTemplate: "http://example.lan:8000/video?channel={channel}"
                     )
                 )
                 let newItem = SourceDraftItem(id: newID, source: newSource, originalID: newSource.id)
@@ -625,6 +699,7 @@ struct SettingsView: View {
 }
 
 private struct SourceEditorCard: View {
+    @State private var areChannelRulesExpanded = false
     @Binding var source: GuideSource
     let channels: [GuideChannel]
     @Binding var hiddenChannelIDs: [String]
@@ -657,13 +732,14 @@ private struct SourceEditorCard: View {
                 }
 
                 VStack(alignment: .trailing, spacing: 10) {
-                    Picker("Type", selection: kindSelection) {
-                        Text("XMLTV").tag(0)
-                        Text("HDHomeRun").tag(1)
+                    HStack(spacing: 4) {
+                        sourceTypeButton("XMLTV", selection: 0)
+                        sourceTypeButton("HDHomeRun", selection: 1)
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 180)
+                    .padding(4)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Source type")
 
                     Button("Remove Source", role: .destructive, action: onRemove)
                         .buttonStyle(SettingsActionButtonStyle(kind: .danger))
@@ -730,104 +806,114 @@ private struct SourceEditorCard: View {
                 .padding(.top, 2)
             }
 
+            if hasLoopbackSource {
+                Label("For iPhone and iPad, replace localhost or 127.0.0.1 with this source’s actual LAN hostname or IP address. Streams play directly from the source.", systemImage: "network")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider().overlay(Color.white.opacity(0.08))
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Channel Rules")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        Text(ruleSummary)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if !channels.isEmpty {
-                        Button(hiddenChannelIDs.isEmpty ? "Hide All" : "Show All") {
-                            if hiddenChannelIDs.isEmpty {
-                                hiddenChannelIDs = channels.map(\.rawChannelID)
-                            } else {
-                                hiddenChannelIDs = []
+            DisclosureGroup(isExpanded: $areChannelRulesExpanded) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Spacer()
+                        if !channels.isEmpty {
+                            Button(hiddenChannelIDs.isEmpty ? "Hide All" : "Show All") {
+                                if hiddenChannelIDs.isEmpty {
+                                    hiddenChannelIDs = channels.map(\.rawChannelID)
+                                } else {
+                                    hiddenChannelIDs = []
+                                }
                             }
+                            .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
                         }
-                        .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
+
+                        if areAdultChannelsUnlocked, !channels.isEmpty {
+                            Button(adultChannelIDs.isEmpty ? "Mark None" : "Clear Locked") {
+                                adultChannelIDs = []
+                            }
+                            .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
+                        } else {
+                            Button("Unlock") {
+                                onAdultUnlockRequest()
+                            }
+                            .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
+                        }
                     }
 
-                    if areAdultChannelsUnlocked, !channels.isEmpty {
-                        Button(adultChannelIDs.isEmpty ? "Mark None" : "Clear Locked") {
-                            adultChannelIDs = []
-                        }
-                        .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
+                    if channels.isEmpty {
+                        Text("Load the guide to manage this source’s channel rules.")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 4)
                     } else {
-                        Button("Unlock") {
-                            onAdultUnlockRequest()
-                        }
-                        .buttonStyle(SettingsActionButtonStyle(kind: .ghost))
-                    }
-                }
-
-                if channels.isEmpty {
-                    Text("Load the guide to manage this source’s channel rules.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
-                } else {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 12) {
-                            Text("Channel")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Hidden")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 60)
-                            if areAdultChannelsUnlocked {
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 11, weight: .bold))
+                        VStack(spacing: 8) {
+                            HStack(spacing: 12) {
+                                Text("Channel")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("Hidden")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(.secondary)
                                     .frame(width: 60)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-
-                        ForEach(channels, id: \.id) { channel in
-                            HStack(spacing: 12) {
-                                HStack(spacing: 8) {
-                                    if channel.hasDisplayNumber {
-                                        Text(channel.displayNumber)
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .frame(width: 42, alignment: .leading)
-                                    }
-                                    Text(channel.name)
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                Toggle("", isOn: hiddenBinding(for: channel.rawChannelID))
-                                    .toggleStyle(.checkbox)
-                                    .labelsHidden()
-                                    .frame(width: 60)
                                 if areAdultChannelsUnlocked {
-                                    Toggle("", isOn: adultBinding(for: channel.rawChannelID))
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 60)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+
+                            ForEach(channels, id: \.id) { channel in
+                                HStack(spacing: 12) {
+                                    HStack(spacing: 8) {
+                                        if channel.hasDisplayNumber {
+                                            Text(channel.displayNumber)
+                                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                                .frame(width: 42, alignment: .leading)
+                                        }
+                                        Text(channel.name)
+                                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: hiddenBinding(for: channel.rawChannelID))
                                         .toggleStyle(.checkbox)
                                         .labelsHidden()
                                         .frame(width: 60)
-                                        .disabled(hiddenChannelIDs.contains(channel.rawChannelID))
-                                        .opacity(hiddenChannelIDs.contains(channel.rawChannelID) ? 0.35 : 1)
+                                    if areAdultChannelsUnlocked {
+                                        Toggle("", isOn: adultBinding(for: channel.rawChannelID))
+                                            .toggleStyle(.checkbox)
+                                            .labelsHidden()
+                                            .frame(width: 60)
+                                            .disabled(hiddenChannelIDs.contains(channel.rawChannelID))
+                                            .opacity(hiddenChannelIDs.contains(channel.rawChannelID) ? 0.35 : 1)
+                                    }
                                 }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(fieldBackground)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(fieldBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                 }
+                .padding(.top, 10)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Channel Rules")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Text(ruleSummary)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .tint(.blue)
         }
         .padding(18)
         .background(cardBackground)
@@ -836,6 +922,30 @@ private struct SourceEditorCard: View {
             RoundedRectangle(cornerRadius: 20)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         }
+    }
+
+    private var hasLoopbackSource: Bool {
+        let values: [String]
+        switch source.kind {
+        case .xmltv(let url, let template): values = [url.absoluteString, template.replacingOccurrences(of: "{channel}", with: "1")]
+        case .hdhomerun(let url): values = [url.absoluteString]
+        }
+        return values.contains { value in
+            guard let host = URL(string: value)?.host?.lowercased() else { return false }
+            return host == "localhost" || host.hasSuffix(".localhost") || host == "::1" || host == "[::1]" || host.hasPrefix("127.")
+        }
+    }
+
+    private func sourceTypeButton(_ title: String, selection: Int) -> some View {
+        Button {
+            guard kindSelection.wrappedValue != selection else { return }
+            kindSelection.wrappedValue = selection
+        } label: {
+            Text(title)
+                .frame(minWidth: 74)
+        }
+        .buttonStyle(SettingsActionButtonStyle(kind: kindSelection.wrappedValue == selection ? .primary : .ghost))
+        .accessibilityAddTraits(kindSelection.wrappedValue == selection ? .isSelected : [])
     }
 
     private var fieldBackground: some ShapeStyle {
@@ -895,8 +1005,8 @@ private struct SourceEditorCard: View {
                     source = GuideSource(
                         id: source.id,
                         kind: .xmltv(
-                            url: URL(string: "http://localhost:8000/xmltv.xml")!,
-                            streamURLTemplate: "http://localhost:8000/video?channel={channel}"
+                            url: URL(string: "http://example.lan:8000/xmltv.xml")!,
+                            streamURLTemplate: "http://example.lan:8000/video?channel={channel}"
                         )
                     )
                 default:
@@ -1264,19 +1374,21 @@ private struct SettingsActionButtonStyle: ButtonStyle {
     }
 
     let kind: Kind
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(background(configuration.isPressed))
             .foregroundStyle(foreground)
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay {
-                Capsule()
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(stroke, lineWidth: 1)
             }
+            .opacity(isEnabled ? 1 : 0.45)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
@@ -1286,7 +1398,7 @@ private struct SettingsActionButtonStyle: ButtonStyle {
         case .primary:
             return .white
         case .secondary, .ghost:
-            return .primary
+            return .white
         case .danger:
             return Color(red: 1.0, green: 0.82, blue: 0.82)
         }
@@ -1308,8 +1420,8 @@ private struct SettingsActionButtonStyle: ButtonStyle {
         case .primary:
             return AnyShapeStyle(LinearGradient(
                 colors: [
-                    Color(red: 0.16, green: 0.52, blue: 1.0).opacity(isPressed ? 0.82 : 1),
-                    Color(red: 0.32, green: 0.22, blue: 1.0).opacity(isPressed ? 0.72 : 0.92)
+                    Color(red: 0.13, green: 0.53, blue: 1.0).opacity(isPressed ? 0.82 : 1),
+                    Color(red: 0.42, green: 0.22, blue: 1.0).opacity(isPressed ? 0.72 : 0.92)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -1317,8 +1429,8 @@ private struct SettingsActionButtonStyle: ButtonStyle {
         case .secondary:
             return AnyShapeStyle(LinearGradient(
                 colors: [
-                    Color.white.opacity(isPressed ? 0.08 : 0.12),
-                    Color.white.opacity(isPressed ? 0.04 : 0.06)
+                    Color.white.opacity(isPressed ? 0.10 : 0.14),
+                    Color.white.opacity(isPressed ? 0.04 : 0.08)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

@@ -1,0 +1,414 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		15F995417F7860FD73E37049 /* lanTVAppleTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476B9214A06AF1A2F3F54093 /* lanTVAppleTVApp.swift */; };
+		4D9A08E89D6EE2356AA7BC8F /* MobileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 664933A0F78D678513565498 /* MobileStore.swift */; };
+		53C9C549F5FF88270D0E3AA0 /* TVVLCKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		564993FCEC8D6D587F2915C6 /* MobileCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EACA7C6340AFF48C57DBC36C /* MobileCore.swift */; };
+		B6160C30F22F9CB1414DFC82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7F7344046D3EA2E201680F8D /* Assets.xcassets */; };
+		E4B43C0EDE88F50B1B748B4D /* TVVLCKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */; };
+		E6C4DF506700196A03F7A565 /* TVGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0BE45EEDF4560CBC17F742 /* TVGuideView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		35E62D6A9278F6A4B3E7A6B7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				53C9C549F5FF88270D0E3AA0 /* TVVLCKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		1B0BE45EEDF4560CBC17F742 /* TVGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVGuideView.swift; sourceTree = "<group>"; };
+		476B9214A06AF1A2F3F54093 /* lanTVAppleTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = lanTVAppleTVApp.swift; sourceTree = "<group>"; };
+		527A2054D1846AC14E495341 /* lanTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lanTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		664933A0F78D678513565498 /* MobileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileStore.swift; sourceTree = "<group>"; };
+		7F7344046D3EA2E201680F8D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = TVVLCKit.xcframework; path = Vendor/TVVLCKit.xcframework; sourceTree = "<group>"; };
+		EACA7C6340AFF48C57DBC36C /* MobileCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		400C059FF07F1D7EC6AFB0DF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E4B43C0EDE88F50B1B748B4D /* TVVLCKit.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1330031922C64C818249974D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				527A2054D1846AC14E495341 /* lanTV.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		386DED65480A780D738AFFCC /* Mobile */ = {
+			isa = PBXGroup;
+			children = (
+				5D180A9A3DF27ED7E615548F /* Sources */,
+			);
+			path = Mobile;
+			sourceTree = "<group>";
+		};
+		5D180A9A3DF27ED7E615548F /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A8FAE6AA7BDF88561A27DBE1 /* lanTVMobile */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		780155E547D26D663E4C9B72 /* lanTV */ = {
+			isa = PBXGroup;
+			children = (
+				386DED65480A780D738AFFCC /* Mobile */,
+			);
+			name = lanTV;
+			path = ..;
+			sourceTree = "<group>";
+		};
+		85558C0537F288764DE3B2AF /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BEE08B53B99BBA8001D78C93 /* TVVLCKit.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A2EEE79EE1F4604F7252F2B0 = {
+			isa = PBXGroup;
+			children = (
+				7F7344046D3EA2E201680F8D /* Assets.xcassets */,
+				780155E547D26D663E4C9B72 /* lanTV */,
+				C766F4F443146B662B434E54 /* Sources */,
+				85558C0537F288764DE3B2AF /* Frameworks */,
+				1330031922C64C818249974D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A8FAE6AA7BDF88561A27DBE1 /* lanTVMobile */ = {
+			isa = PBXGroup;
+			children = (
+				EACA7C6340AFF48C57DBC36C /* MobileCore.swift */,
+				664933A0F78D678513565498 /* MobileStore.swift */,
+			);
+			path = lanTVMobile;
+			sourceTree = "<group>";
+		};
+		C766F4F443146B662B434E54 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				E2F0C07238654930F3644C18 /* lanTVAppleTV */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		E2F0C07238654930F3644C18 /* lanTVAppleTV */ = {
+			isa = PBXGroup;
+			children = (
+				476B9214A06AF1A2F3F54093 /* lanTVAppleTVApp.swift */,
+				1B0BE45EEDF4560CBC17F742 /* TVGuideView.swift */,
+			);
+			path = lanTVAppleTV;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		21E348E2D23232793464611C /* lanTVAppleTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 615A1855055F695665B8824E /* Build configuration list for PBXNativeTarget "lanTVAppleTV" */;
+			buildPhases = (
+				168CE2C185C110025F341B53 /* Sources */,
+				EF6670E361B9FDEAA5AE088D /* Resources */,
+				400C059FF07F1D7EC6AFB0DF /* Frameworks */,
+				35E62D6A9278F6A4B3E7A6B7 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = lanTVAppleTV;
+			packageProductDependencies = (
+			);
+			productName = lanTVAppleTV;
+			productReference = 527A2054D1846AC14E495341 /* lanTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E900D1920AF676F645955829 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					21E348E2D23232793464611C = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = FDA3684E59B0BD4A768E8153 /* Build configuration list for PBXProject "lanTVAppleTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A2EEE79EE1F4604F7252F2B0;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1330031922C64C818249974D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				21E348E2D23232793464611C /* lanTVAppleTV */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		EF6670E361B9FDEAA5AE088D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B6160C30F22F9CB1414DFC82 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		168CE2C185C110025F341B53 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				564993FCEC8D6D587F2915C6 /* MobileCore.swift in Sources */,
+				4D9A08E89D6EE2356AA7BC8F /* MobileStore.swift in Sources */,
+				E6C4DF506700196A03F7A565 /* TVGuideView.swift in Sources */,
+				15F995417F7860FD73E37049 /* lanTVAppleTVApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		2F66BE9864EB07EC44A28982 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ragingcoders.lanTV.appletv;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		36762DAD93D51A0134144BCD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_NAME = lanTV;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		80ACA3C804A5D79BD3218C84 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Vendor\"",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_NAME = lanTV;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		A2C792378286579BE790E29F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ragingcoders.lanTV.appletv;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		615A1855055F695665B8824E /* Build configuration list for PBXNativeTarget "lanTVAppleTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				36762DAD93D51A0134144BCD /* Debug */,
+				80ACA3C804A5D79BD3218C84 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FDA3684E59B0BD4A768E8153 /* Build configuration list for PBXProject "lanTVAppleTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F66BE9864EB07EC44A28982 /* Debug */,
+				A2C792378286579BE790E29F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E900D1920AF676F645955829 /* Project object */;
+}
